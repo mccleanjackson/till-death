@@ -1,0 +1,24 @@
+{
+  "name": "till-death-do-us-part",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview",
+    "seed": "node scripts/make-seed.mjs",
+    "mock": "node test/mock-server.mjs",
+    "test": "node test/simulate.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.49.4",
+    "react": "19.1.0",
+    "react-dom": "19.1.0"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.2.17",
+    "@vitejs/plugin-react": "4.4.1",
+    "vite": "6.3.5"
+  }
+}

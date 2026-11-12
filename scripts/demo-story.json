@@ -1,0 +1,46 @@
+{
+  "title": "Practice Round: The Stolen Cake Topper",
+  "tagline": "A five-minute warm-up. Nobody died. The cake did not survive emotionally.",
+  "victim": { "name": "The Cake Topper", "about": "A tiny porcelain couple that sat on top of the anniversary cake. Now missing." },
+  "intro": "PRACTICE GAME — this is not the real mystery. Use it to make sure everyone can join, read their card, see evidence unlock, and send an accusation. Someone took the porcelain cake topper off the anniversary cake between 7:00 and 7:10. Find out who.",
+  "howToPlay": [
+    "This is a test run — keep it quick.",
+    "Read your card, then tap Evidence when the host releases a round.",
+    "When accusations open, pick a suspect and send it. You can only send once.",
+    "The host reveals the answer when everyone has voted."
+  ],
+  "roles": [
+    { "id": "avery", "name": "Avery", "couple": "The Polished Planners", "partner": "blair", "publicBio": "Brought labelled tupperware for leftovers.", "background": "You organised the cake.", "secret": "You already ate a corner of the cake.", "alibi": "You were refilling drinks with Blair.", "knows": ["The topper was on the cake at 7:00."], "goals": ["Find the topper."], "roundInfo": { "1": "", "2": "You noticed frosting on someone's sleeve.", "3": "" }, "killerBrief": null },
+    { "id": "blair", "name": "Blair", "couple": "The Polished Planners", "partner": "avery", "publicBio": "Has opinions about fondant.", "background": "You helped carry the cake.", "secret": "You think the cake is dry.", "alibi": "You were refilling drinks with Avery.", "knows": ["Avery never left the drinks table."], "goals": ["Defend the cake's honour."], "roundInfo": { "1": "", "2": "", "3": "" }, "killerBrief": null },
+    { "id": "cameron", "name": "Cameron", "couple": "The Competitive Couple", "partner": "drew", "publicBio": "Turns everything into a contest.", "background": "You wanted the topper as a trophy.", "secret": "You joked about stealing it.", "alibi": "You were arm-wrestling Drew.", "knows": ["Drew lost the arm-wrestle twice."], "goals": ["Win something tonight."], "roundInfo": { "1": "", "2": "", "3": "" }, "killerBrief": null },
+    { "id": "drew", "name": "Drew", "couple": "The Competitive Couple", "partner": "cameron", "publicBio": "Demands a rematch for everything.", "background": "You are still annoyed about the arm-wrestle.", "secret": "You let Cameron win once.", "alibi": "You were arm-wrestling Cameron.", "knows": ["Cameron never left the table."], "goals": ["Get a rematch."], "roundInfo": { "1": "", "2": "", "3": "" }, "killerBrief": null },
+    { "id": "ellis", "name": "Ellis", "couple": "The Broke College Couple", "partner": "finley", "publicBio": "Brought a coupon as a gift.", "background": "You came for the free food.", "secret": "You packed snacks in your bag.", "alibi": "You were near the cake alone at 7:05.", "knows": ["You saw the topper was gone at 7:08."], "goals": ["Take home leftovers."], "roundInfo": { "1": "", "2": "", "3": "" }, "killerBrief": null },
+    { "id": "finley", "name": "Finley", "couple": "The Broke College Couple", "partner": "ellis", "publicBio": "Knows the price of everything.", "background": "You are doing the maths on the cake.", "secret": "You priced the topper online.", "alibi": "You were on the phone outside.", "knows": ["Ellis's bag only had crackers in it."], "goals": ["Find out what the topper cost."], "roundInfo": { "1": "", "2": "", "3": "" }, "killerBrief": null },
+    { "id": "gray", "name": "Gray", "couple": "The Online-Famous Couple", "partner": "harper", "publicBio": "Filming content for later.", "background": "You were filming the cake.", "secret": "Your video has a gap at 7:04.", "alibi": "You were filming the room.", "knows": ["Your video shows the topper at 7:03."], "goals": ["Get the cake on camera."], "roundInfo": { "1": "", "2": "", "3": "" }, "killerBrief": null },
+    { "id": "harper", "name": "Harper", "couple": "The Online-Famous Couple", "partner": "gray", "publicBio": "Writing captions in their head.", "background": "You were helping Gray film.", "secret": "You deleted a blurry clip.", "alibi": "You were holding Gray's ring light.", "knows": ["Gray filmed non-stop except at 7:04."], "goals": ["Get a good caption."], "roundInfo": { "1": "", "2": "", "3": "" }, "killerBrief": null },
+    { "id": "jasmine", "name": "Jasmine", "couple": "The Quiet Couple", "partner": "tessa", "publicBio": "Noticed the cake first.", "background": "You love small porcelain things.", "secret": "You collect tiny figurines.", "alibi": "You were by the cake at 7:04.", "knows": ["Tessa was in the kitchen all night."], "goals": ["Stay unnoticed."], "roundInfo": { "1": "", "2": "", "3": "" }, "killerBrief": "PRACTICE: You took the topper at 7:04 while Gray's camera was off. Deny it politely." },
+    { "id": "tessa", "name": "Tessa", "couple": "The Quiet Couple", "partner": "jasmine", "publicBio": "Calm in the kitchen.", "background": "You were washing dishes.", "secret": "You broke a glass.", "alibi": "You were in the kitchen.", "knows": ["Jasmine came back from the cake smiling at 7:05."], "goals": ["Keep the peace."], "roundInfo": { "1": "", "2": "", "3": "" }, "killerBrief": null }
+  ],
+  "coupleStories": {
+    "The Polished Planners": "You planned the party. Practice game only.",
+    "The Competitive Couple": "You compete at everything. Practice game only.",
+    "The Broke College Couple": "Free food is a love language. Practice game only.",
+    "The Online-Famous Couple": "Everything is content. Practice game only.",
+    "The Quiet Couple": "You notice things. Practice game only."
+  },
+  "rounds": [
+    { "title": "Round 1 · The empty cake", "prompt": "Who was near the cake between 7:00 and 7:10?", "exhibits": [ { "id": "1A", "title": "Cake photo", "body": "The topper is gone. Two tiny footprints in the frosting." } ] },
+    { "title": "Round 2 · The video", "prompt": "Compare what everyone saw.", "exhibits": [ { "id": "2A", "title": "Gray's video", "body": "Topper visible at 7:03. Camera off 7:04. Topper missing at 7:05." } ] },
+    { "title": "Round 3 · The pocket", "prompt": "Last chance to compare notes.", "exhibits": [ { "id": "3A", "title": "Frosting", "body": "A smudge of frosting is found on a jacket belonging to one of the quiet couple." } ] }
+  ],
+  "solution": {
+    "killer": "jasmine",
+    "summary": "Jasmine took the topper for their figurine collection.",
+    "motive": "They collect tiny figurines.",
+    "method": "Grabbed it at 7:04 while Gray's camera was off.",
+    "timeline": ["7:03 — topper on camera", "7:04 — camera off; Jasmine at the cake", "7:05 — topper gone"],
+    "proof": ["Gray's video gap at 7:04 (2A)", "Jasmine was at the cake at 7:04 (own card)", "Tessa saw Jasmine smiling at 7:05"],
+    "redHerrings": ["Ellis was near the cake but only had crackers."],
+    "reveal": "It was Jasmine, in the kitchen... no, at the cake, with their pocket. Practice over — the real mystery is a lot harder!"
+  }
+}
