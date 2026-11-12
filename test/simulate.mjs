@@ -58,7 +58,7 @@ for (const id of ids) {
   const s = await rpc('td_state', codes[id], null);
   ok(s.role.sealed && !s.role.secret && !s.role.killerBrief, `card sealed in lobby (${id})`);
   ok(!leaks(s), `no secret text in lobby (${id})`);
-  ok(!s.reveal && s.rounds.length === 0, `no reveal or evidence in lobby (${id})`);
+  ok(!s.reveal && s.rounds.length === 0 && !s.event, `no reveal, evidence or discovery in lobby (${id})`);
 }
 ok(await err(rpc('td_ready', codes[ids[0]])) === 'NOT_YET', 'cannot mark ready before cards unlock');
 
@@ -80,7 +80,7 @@ for (const id of ids) {
   const s = await rpc('td_state', codes[id], null);
   ok(!s.role.sealed && s.role.secret, `card unlocked (${id})`);
   ok(!!s.role.killerBrief === (id === killer), `killerBrief only for killer (${id})`);
-  ok(!s.reveal && s.rounds.length === 0, `no evidence or reveal while reading roles (${id})`);
+  ok(!s.reveal && s.rounds.length === 0 && !s.event, `no evidence, discovery or reveal while reading roles (${id})`);
   if (id !== killer) ok(!leaks(s), `no solution text leaks to ${id}`);
   ok(!JSON.stringify(s.cast).includes('"secret"'), 'cast has no secrets');
 }
@@ -90,10 +90,13 @@ const sReady = await rpc('td_state', host, null);
 ok(sReady.readyCount === 7 && sReady.hostPlayers.filter(p => p.ready).length === 7, `ready count 7 (got ${sReady.readyCount})`);
 
 await rpc('td_advance', host, 2, 3);
-ok((await rpc('td_state', host, null)).rounds.length === 1, 'round 1 released at phase 3');
-for (const p of [4, 5, 6]) await rpc('td_advance', host, p - 1, p);
+const sEv = await rpc('td_state', codes[ids[4]], null);
+ok(sEv.phase === 3 && sEv.event?.text && sEv.rounds.length === 0, 'discovery shown, no evidence yet');
+await rpc('td_advance', host, 3, 4);
+ok((await rpc('td_state', host, null)).rounds.length === 1, 'round 1 released at phase 4');
+for (const p of [5, 6, 7]) await rpc('td_advance', host, p - 1, p);
 const s4 = await rpc('td_state', codes[ids[2]], null);
-ok(s4.phase === 6 && s4.rounds.length === 3, 'all three rounds visible during accusations');
+ok(s4.phase === 7 && s4.rounds.length === 3, 'all three rounds visible during accusations');
 const r3 = story.roles.find(r => r.id === ids[2]).roundInfo || {};
 ok(Object.keys(s4.role.roundInfo).length === Object.values(r3).filter(Boolean).length, 'round info unlocked');
 
@@ -107,10 +110,10 @@ ok(sv.voteCount === 10 && sv.myBallot?.suspect === killer, 'vote count + my ball
 ok(!sv.reveal && !leaks(sv) || ids[0] === killer, 'still no reveal while voting');
 
 // Reveal
-await rpc('td_advance', host, 6, 7);
+await rpc('td_advance', host, 7, 8);
 const s5 = await rpc('td_state', codes[ids[5]], null);
 ok(s5.reveal?.solution?.killer === killer && s5.reveal.ballots.length === 10, 'reveal shows solution + ballots');
-ok(await err(rpc('td_advance', host, 7, 8)) === 'BAD_PHASE', 'nothing after reveal');
+ok(await err(rpc('td_advance', host, 8, 9)) === 'BAD_PHASE', 'nothing after reveal');
 
 // Reset (rehearsal)
 ok(await err(rpc('td_reset', host, 'nah')) === 'CONFIRM_REQUIRED', 'reset needs confirmation');

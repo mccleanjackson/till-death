@@ -5,7 +5,7 @@
 -- Design: all data lives in the non-exposed schema td_private. Browsers can only call the
 -- public td_* functions below, which check the player's personal code and only ever return
 -- what that player is allowed to see at the current phase.
--- Phases: 0 lobby · 1 opening story · 2 read your role · 3-5 evidence rounds · 6 accusations · 7 reveal
+-- Phases: 0 lobby · 1 opening story · 2 read your role · 3 the discovery · 4-6 evidence rounds · 7 accusations · 8 reveal
 
 create schema if not exists td_private;
 revoke all on schema td_private from public;
@@ -18,7 +18,7 @@ create table if not exists td_private.stories (
 create table if not exists td_private.games (
   id         text primary key,
   story_id   text not null references td_private.stories(id),
-  phase      int  not null default 0 check (phase between 0 and 7),
+  phase      int  not null default 0 check (phase between 0 and 8),
   version    int  not null default 1,
   updated_at timestamptz not null default now()
 );
@@ -47,7 +47,7 @@ create table if not exists td_private.ballots (
 -- Upgrades for databases created by an earlier version of this file (safe to re-run).
 alter table td_private.players add column if not exists ready_at timestamptz;
 alter table td_private.games drop constraint if exists games_phase_check;
-alter table td_private.games add constraint games_phase_check check (phase between 0 and 7);
+alter table td_private.games add constraint games_phase_check check (phase between 0 and 8);
 
 alter table td_private.stories enable row level security;
 alter table td_private.games   enable row level security;
@@ -94,7 +94,7 @@ begin
   end if;
 
   s := td_private.story(g.story_id);
-  rnd := least(greatest(g.phase - 2, 0), 3);   -- evidence rounds start at phase 3
+  rnd := least(greatest(g.phase - 3, 0), 3);   -- evidence rounds start at phase 4
   select e into r from jsonb_array_elements(s->'roles') e where e->>'id' = p.role_id;
 
   out := jsonb_build_object(
@@ -103,6 +103,7 @@ begin
     'gameId', g.id,
     'title', s->'title', 'tagline', s->'tagline', 'victim', s->'victim',
     'intro', s->'intro', 'howToPlay', s->'howToPlay',
+    'event', case when g.phase >= 3 then s->'event' end,   -- the discovery stays hidden until announced
     'me', jsonb_build_object('roleId', p.role_id, 'isHost', p.is_host, 'guestName', p.guest_name, 'ready', p.ready_at is not null),
     -- Character cards stay sealed until the host reaches "read your role" (phase 2).
     'role', case when g.phase < 2 then jsonb_build_object('id', r->'id', 'name', r->'name', 'couple', r->'couple', 'partner', r->'partner', 'publicBio', r->'publicBio', 'sealed', true)
@@ -131,7 +132,7 @@ begin
     out := out || jsonb_build_object('hostPlayers', host_extra);
   end if;
 
-  if g.phase >= 7 then
+  if g.phase >= 8 then
     reveal := jsonb_build_object(
       'solution', s->'solution',
       'ballots', coalesce((select jsonb_agg(jsonb_build_object('roleId', b.role_id, 'suspect', b.suspect, 'motive', b.motive, 'reasoning', b.reasoning) order by b.created_at)
@@ -150,7 +151,7 @@ begin
   if not p.is_host then raise exception 'NOT_HOST' using hint = 'Only the host can change rounds.'; end if;
   select * into g from td_private.games where id = p.game_id for update;
   if g.phase <> p_from then raise exception 'PHASE_CHANGED' using hint = 'The game already moved on. Refreshing.'; end if;
-  if p_to not in (p_from + 1, p_from - 1) or p_to < 0 or p_to > 7 then raise exception 'BAD_PHASE'; end if;
+  if p_to not in (p_from + 1, p_from - 1) or p_to < 0 or p_to > 8 then raise exception 'BAD_PHASE'; end if;
   update td_private.games set phase = p_to, version = version + 1, updated_at = now() where id = g.id;
   return jsonb_build_object('phase', p_to);
 end $$;
@@ -162,7 +163,7 @@ declare p td_private.players; g td_private.games; n int;
 begin
   p := td_private.player(p_code);
   select * into g from td_private.games where id = p.game_id;
-  if g.phase <> 6 then raise exception 'VOTING_CLOSED' using hint = 'Accusations are not open right now.'; end if;
+  if g.phase <> 7 then raise exception 'VOTING_CLOSED' using hint = 'Accusations are not open right now.'; end if;
   if not exists (select 1 from jsonb_array_elements(td_private.story(g.story_id)->'roles') e where e->>'id' = p_suspect) then
     raise exception 'BAD_SUSPECT';
   end if;

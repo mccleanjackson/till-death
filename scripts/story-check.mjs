@@ -21,6 +21,7 @@ export function checkStory(s, label = 'story') {
   need(ids.includes(s.solution?.killer), 'solution.killer is not a role id');
   need(killers[0]?.id === s.solution?.killer, 'killerBrief role does not match solution.killer');
   need((s.rounds || []).length === 3, 'expected 3 rounds');
+  need(s.event && s.event.title && s.event.text && s.event.prompt, 'missing event {title, text, prompt}');
   for (const [i, rd] of (s.rounds || []).entries()) need(rd.title && Array.isArray(rd.exhibits) && rd.exhibits.length, `round ${i + 1} incomplete`);
   return problems;
 }

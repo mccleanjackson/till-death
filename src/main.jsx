@@ -4,10 +4,10 @@ import { api, configured, store } from './api.js';
 import './style.css';
 
 const POLL_MS = 3000;
-const PHASE_LABEL = ['Lobby', 'The Story', 'Your Role', 'Round 1', 'Round 2', 'Round 3', 'Accusations', 'The Reveal'];
-// Phases: 0 lobby · 1 opening story · 2 read your role · 3-5 evidence rounds · 6 accusations · 7 reveal
-const ROUND1 = 3, ACCUSE = 6, REVEAL = 7;
-const PHASE_ARRIVAL = { 1: ['The story begins', 'home'], 2: ['Your character card is unlocked', 'card'], 3: ['Round 1 evidence is unlocked', 'clues'], 4: ['Round 2 evidence is unlocked', 'clues'], 5: ['Round 3 evidence is unlocked', 'clues'], 6: ['Accusations are open', 'accuse'], 7: ['The truth is revealed', 'home'] };
+const PHASE_LABEL = ['Lobby', 'The Story', 'Your Role', 'The Discovery', 'Round 1', 'Round 2', 'Round 3', 'Accusations', 'The Reveal'];
+// Phases: 0 lobby · 1 opening story · 2 read your role · 3 the discovery · 4-6 evidence rounds · 7 accusations · 8 reveal
+const DISCOVERY = 3, ROUND1 = 4, ACCUSE = 7, REVEAL = 8;
+const PHASE_ARRIVAL = { 1: ['The story begins', 'home'], 2: ['Your character card is unlocked', 'card'], 3: ['Something has happened…', 'home'], 4: ['Round 1 evidence is unlocked', 'clues'], 5: ['Round 2 evidence is unlocked', 'clues'], 6: ['Round 3 evidence is unlocked', 'clues'], 7: ['Accusations are open', 'accuse'], 8: ['The truth is revealed', 'home'] };
 
 // ---------- join code from link: …/#/j/ABC123 ----------
 function codeFromHash() {
@@ -99,7 +99,8 @@ function App() {
       if (game.phase === 0) { store.del(`td_notes_${game.gameId}`); store.del(`td_draft_${game.gameId}`); }
       store.set(`td_seen_${game.gameId}`, game.rounds.length);
     }
-    if (prev === null || prev === game.phase || game.phase < prev) return;
+    if (prev === null) { setTab(game.phase === 0 ? 'home' : PHASE_ARRIVAL[game.phase][1]); return; } // fresh open: go to the current phase's screen
+    if (prev === game.phase || game.phase < prev) return;
     const [msg, toTab] = PHASE_ARRIVAL[game.phase];
     setToast(msg);
     try { navigator.vibrate?.([120, 60, 120]); } catch { /* ignore */ }
@@ -207,6 +208,13 @@ function Home({ game, code, refresh, onLeave, setTab }) {
       <Paras text={game.intro} />
     </Panel>
   );
+  const discovery = game.event && (
+    <Panel kicker={game.phase === DISCOVERY ? 'Read it aloud' : 'What happened'} title={game.event.title} className={game.phase === DISCOVERY ? 'event' : ''}>
+      <Paras text={game.event.text} />
+      {game.event.prompt && <div className="talk"><div className="tag">Now talk</div><Paras text={game.event.prompt} /></div>}
+      {game.phase === DISCOVERY && <p className="small">No evidence yet. The host will release the first clues soon. Check your card too: new memories may unlock.</p>}
+    </Panel>
+  );
   const rules = game.howToPlay?.length > 0 && <Panel kicker="House rules" title="How to play"><ul className="rules">{game.howToPlay.map((r, i) => <li key={i}>{r}</li>)}</ul></Panel>;
   return (
     <>
@@ -218,6 +226,11 @@ function Home({ game, code, refresh, onLeave, setTab }) {
             <p className="stat"><b>{game.joinedCount}</b> of {game.playerCount} guests have joined</p>
           </Panel>
           {rules}
+        </>
+      ) : game.phase === DISCOVERY ? (
+        <>
+          {discovery}
+          {story}
         </>
       ) : game.phase === 1 ? (
         <>
@@ -243,6 +256,7 @@ function Home({ game, code, refresh, onLeave, setTab }) {
               <button className="primary" onClick={() => setTab('accuse')}>{game.myBallot ? 'View my accusation' : 'Make my accusation'}</button>
             </>}
           </Panel>
+          {discovery}
           {story}
         </>
       )}
@@ -258,6 +272,7 @@ function Home({ game, code, refresh, onLeave, setTab }) {
 const NEXT = [
   ['Start: tell the story', 'Show the opening story on every phone? Everyone should be here first.'],
   ['Unlock character cards', 'Unlock everyone’s secret character card?'],
+  ['Announce the discovery', 'Show what happened on every phone? Everyone should have read their card.'],
   ['Release Round 1 evidence', 'Release the first evidence to every phone?'],
   ['Release Round 2', 'Release Round 2 evidence to every phone?'],
   ['Release Round 3', 'Release the final round of evidence?'],
@@ -276,7 +291,7 @@ function HostPanel({ game, code, refresh }) {
     const [label, ask] = to > game.phase ? NEXT[game.phase] : ['Go back', `Go back to ${PHASE_LABEL[to]}? Evidence already seen stays in people’s heads!`];
     let warn = '';
     if (to === REVEAL && game.voteCount < game.playerCount) warn = `\n\nOnly ${game.voteCount} of ${game.playerCount} have voted.`;
-    if (to === ROUND1 && game.readyCount < game.playerCount) warn = `\n\nOnly ${game.readyCount} of ${game.playerCount} have tapped “I’ve read my card”.`;
+    if (to === DISCOVERY && game.readyCount < game.playerCount) warn = `\n\nOnly ${game.readyCount} of ${game.playerCount} have tapped “I’ve read my card”.`;
     if (to === 1 && game.joinedCount < game.playerCount) warn = `\n\nOnly ${game.joinedCount} of ${game.playerCount} have joined.`;
     if (!confirm(`${label}: ${ask}${warn}`)) return;
     setBusy(true); setMsg(null);
@@ -364,7 +379,7 @@ function Card({ game, code, refresh }) {
       {r.goals?.length > 0 && <Panel kicker="Little missions" title="Your goals tonight"><ul className="facts">{r.goals.map((k, i) => <li key={i}>{k}</li>)}</ul></Panel>}
       <p className="small center">Innocent players may hide secrets but should never lie about evidence.</p>
       {game.phase === 2 && (game.me.ready
-        ? <Panel className="locked" kicker="Ready ✓" title="You’re all set"><p>The first evidence drops when everyone is ready. Your card stays here all night.</p></Panel>
+        ? <Panel className="locked" kicker="Ready ✓" title="You’re all set"><p>The host will continue once everyone is ready. Your card stays here all night.</p></Panel>
         : <button className="primary big" disabled={busy} onClick={ready}>{busy ? 'Saving…' : 'I’ve read my card'}</button>)}
     </>
   );
