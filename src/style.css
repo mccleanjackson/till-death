@@ -136,3 +136,9 @@ form input + button { margin-top: 12px; }
 .panel.event { border-color: var(--red); background: radial-gradient(130% 90% at 100% 0%, #5c1a2b, var(--card) 65%); }
 .panel.event p { font-size: 17px; }
 .talk { margin-top: 14px; padding: 12px 14px; border-radius: 12px; background: #0003; border-left: 3px solid var(--gold); }
+
+.tl { list-style: none; padding: 0; margin: 12px 0 0; }
+.tl li { display: grid; grid-template-columns: 74px 1fr; gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); }
+.tl b { color: var(--gold); font-size: 14px; white-space: nowrap; }
+.tl span { display: block; font-size: 15px; line-height: 1.45; }
+.tl em { display: inline-block; margin-top: 4px; font-style: normal; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }

@@ -23,7 +23,8 @@ function codeFromHash() {
 const KEEP = new Set(['guestName', 'code', 'roleId', 'id', 'partner', 'suspect', 'gameId', 'ballots', 'myBallot', 'hostPlayers', 'character', 'me']);
 export function personalize(game) {
   if (!game?.cast) return game;
-  const map = Object.fromEntries(game.cast.filter(c => c.guestName).map(c => [c.name, c.guestName]));
+  // Unjoined seats become "Guest N" so no made-up character names ever appear on screen.
+  const map = Object.fromEntries(game.cast.map((c, i) => [c.name, c.guestName || `Guest ${i + 1}`]));
   const names = Object.keys(map).sort((a, b) => b.length - a.length).map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
   const re = names.length ? new RegExp(`\\b(${names.join('|')})\\b`, 'g') : null;
   const walk = v => {
@@ -292,7 +293,7 @@ function HostPanel({ game, code, refresh }) {
     let warn = '';
     if (to === REVEAL && game.voteCount < game.playerCount) warn = `\n\nOnly ${game.voteCount} of ${game.playerCount} have voted.`;
     if (to === DISCOVERY && game.readyCount < game.playerCount) warn = `\n\nOnly ${game.readyCount} of ${game.playerCount} have tapped “I’ve read my card”.`;
-    if (to === 1 && game.joinedCount < game.playerCount) warn = `\n\nOnly ${game.joinedCount} of ${game.playerCount} have joined.`;
+    if (to === 1 && game.joinedCount < game.playerCount) warn = `\n\nOnly ${game.joinedCount} of ${game.playerCount} have joined. Empty seats will appear in the story as “Guest 3”, “Guest 7” and so on.`;
     if (!confirm(`${label}: ${ask}${warn}`)) return;
     setBusy(true); setMsg(null);
     try { await api.advance(code, game.phase, to); } catch (e) { setMsg(e.message); }
@@ -327,7 +328,7 @@ function HostPanel({ game, code, refresh }) {
             const hp = game.hostPlayers.find(p => p.roleId === c.id);
             return (
               <li key={c.id}>
-                <div><b>{c.guestName || <span className="muted">Waiting for a guest</span>}</b> <span className="muted">· {c.character}</span>
+                <div><b>{c.guestName || <span className="muted">{c.name} · open seat</span>}</b> <span className="muted">· {c.couple}</span>
                   <div className="small">{hp.joined ? '✓ joined' : 'not joined yet'}{game.phase === 2 ? (hp.ready ? ' · ✓ read card' : ' · still reading') : ''}{game.phase === ACCUSE ? (hp.voted ? ' · ✓ voted' : ' · waiting on vote') : ''}</div></div>
                 <button className="chip" onClick={() => share(hp)}>Send link</button>
               </li>
@@ -418,7 +419,7 @@ function Suspects({ game }) {
           <h3>{couple}</h3>
           {people.map(c => (
             <div key={c.id} className={`suspect ${c.id === game.me.roleId ? 'me' : ''}`}>
-              <div className="who"><b>{c.name}</b>{!c.guestName && <span> · not joined yet</span>}{c.id === game.me.roleId && <span className="you">you</span>}</div>
+              <div className="who"><b>{c.name}</b>{!c.guestName && <span> · open seat</span>}{c.id === game.me.roleId && <span className="you">you</span>}</div>
               <p>{c.publicBio}</p>
               {c.id !== game.me.roleId && <textarea rows={2} placeholder={`Notes on ${c.name}…`} value={notes[c.id] || ''} onChange={e => save(c.id, e.target.value)} />}
             </div>
@@ -437,9 +438,9 @@ function Clues({ game }) {
   const seenBefore = useRef(store.get(seenKey, 0));
   useEffect(() => { store.set(seenKey, game.rounds.length); }, [game.rounds.length]);
   const save = v => { const n = { ...store.get(key, {}), _general: v }; setNotes(n); store.set(key, n); };
-  if (!game.rounds.length) return <Panel kicker="Evidence locker" title="Nothing yet"><p>Evidence unlocks when the host starts Round 1. In the meantime, read your card and get to know the suspects.</p></Panel>;
   return (
     <>
+      {!game.rounds.length && <Panel kicker="Evidence locker" title="Nothing yet"><p>Evidence unlocks when the host starts Round 1. In the meantime, read your card and get to know the suspects.</p></Panel>}
       {[...game.rounds].map((rd, i) => ({ rd, n: i + 1 })).reverse().map(({ rd, n }) => (
         <Panel key={n} kicker={n > seenBefore.current ? 'New evidence' : `Round ${n}`} title={rd.title} className={n > seenBefore.current ? 'fresh' : ''}>
           {rd.prompt && <p className="prompt">{rd.prompt}</p>}
@@ -448,10 +449,61 @@ function Clues({ game }) {
           ))}
         </Panel>
       ))}
+      <Timeline game={game} />
       <Panel kicker="Only on this phone" title="My case notes">
         <textarea rows={8} placeholder="Timeline, contradictions, hunches…" value={notes._general || ''} onChange={e => save(e.target.value)} />
       </Panel>
     </>
+  );
+}
+
+// ---------- automatic timeline ----------
+// Pulls every sentence with a story time ("8:35 PM") out of what this player can see, sorted in order.
+const TIME_RE = /\b(1[0-2]|0?[1-9]):([0-5]\d)(?:\s*([AaPp])\.?[Mm]\.?)?/;
+function timeKey(text) {
+  const m = text.match(TIME_RE);
+  if (!m) return null;
+  let h = Number(m[1]) % 12;
+  const ap = m[3]?.toLowerCase();
+  if (ap === 'p') h += 12;
+  if (!ap && h < 7) h += 12;            // no AM/PM given: assume an evening story
+  if (h < 5) h += 24;                    // after midnight sorts after the evening
+  return h * 60 + Number(m[2]);
+}
+function sentences(text) {
+  return (text || '').split(/\n+|(?<=[.!?])\s+(?=["“'A-Z0-9])/).map(t => t.trim()).filter(Boolean);
+}
+function Timeline({ game }) {
+  const [open, setOpen] = useState(true);
+  const items = useMemo(() => {
+    const out = []; const seen = new Set();
+    const add = (text, source) => {
+      for (const sen of sentences(text)) {
+        const k = timeKey(sen);
+        if (k === null || seen.has(sen)) continue;
+        seen.add(sen); out.push({ k, sen, source, time: sen.match(TIME_RE)[0] });
+      }
+    };
+    add(game.intro, 'Story');
+    if (game.event) add(game.event.text, 'Discovery');
+    const r = game.role || {};
+    if (!r.sealed) {
+      for (const f of ['background', 'secret', 'alibi', 'coupleStory', 'killerBrief']) add(r[f], 'My card');
+      for (const k of r.knows || []) add(k, 'My card');
+      for (const [n, t] of Object.entries(r.roundInfo || {})) add(t, `My memory · R${n}`);
+    }
+    game.rounds.forEach(rd => rd.exhibits.forEach(x => add(x.body, `Exhibit ${x.id}`)));
+    return out.sort((a, b) => a.k - b.k);
+  }, [game]);
+  if (!items.length) return null;
+  return (
+    <Panel kicker="Story time, not tonight's clock" title="My timeline" className="timeline-panel">
+      <p className="small">Every time from the story, your card and the evidence, sorted in order. It updates as new clues unlock. Only you can see this.</p>
+      <button className="ghost" onClick={() => setOpen(o => !o)}>{open ? 'Hide' : 'Show'} timeline ({items.length})</button>
+      {open && <ol className="tl">{items.map((it, i) => (
+        <li key={i}><b>{it.time.toUpperCase().replace(/\s+/, ' ')}</b><div><span>{it.sen}</span><em>{it.source}</em></div></li>
+      ))}</ol>}
+    </Panel>
   );
 }
 
