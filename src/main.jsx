@@ -14,6 +14,29 @@ function codeFromHash() {
   return m[1].toUpperCase();
 }
 
+// Replace every character name in the story with the real name of the guest playing it.
+// Single regex pass, so a guest whose real name matches another character can't cause chain swaps.
+// Fields typed by guests (accusations) and identifiers are left alone.
+const KEEP = new Set(['guestName', 'code', 'roleId', 'id', 'partner', 'suspect', 'gameId', 'ballots', 'myBallot', 'hostPlayers', 'character', 'me']);
+export function personalize(game) {
+  if (!game?.cast) return game;
+  const map = Object.fromEntries(game.cast.filter(c => c.guestName).map(c => [c.name, c.guestName]));
+  const names = Object.keys(map).sort((a, b) => b.length - a.length).map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const re = names.length ? new RegExp(`\\b(${names.join('|')})\\b`, 'g') : null;
+  const walk = v => {
+    if (typeof v === 'string') return re ? v.replace(re, m => map[m] ?? m) : v;
+    if (Array.isArray(v)) return v.map(walk);
+    if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, KEEP.has(k) ? x : walk(x)]));
+    return v;
+  };
+  const withChars = {
+    ...game,
+    cast: game.cast.map(c => ({ ...c, character: c.name })),
+    role: game.role && { ...game.role, character: game.role.name },
+  };
+  return walk(withChars);
+}
+
 function useGame(code) {
   const [game, setGame] = useState(null);
   const [error, setError] = useState(null);
@@ -49,7 +72,8 @@ function useGame(code) {
 // ---------- app ----------
 function App() {
   const [code, setCode] = useState(() => { const c = codeFromHash(); if (c) store.set('td_code', c); return c || store.get('td_code'); });
-  const { game, error, offline, refresh } = useGame(code);
+  const { game: rawGame, error, offline, refresh } = useGame(code);
+  const game = useMemo(() => personalize(rawGame), [rawGame]);
   const [tab, setTab] = useState(() => store.get('td_tab', 'home'));
   const [toast, setToast] = useState(null);
   const lastPhase = useRef(null);
@@ -81,7 +105,7 @@ function App() {
   if (!configured) return <Shell><Panel title="Setup needed"><p>Add <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code> to <code>.env</code> and rebuild.</p></Panel></Shell>;
   if (!code || error?.code === 'INVALID_CODE') return <Shell hero><Join error={error && code ? error.message : null} onJoin={c => { store.set('td_code', c); setCode(c); }} /></Shell>;
   if (!game) return <Shell hero>{offline ? <Banner kind="warn">Can’t reach the game server. Retrying…</Banner> : <div className="loading">Opening the case file…</div>}</Shell>;
-  if (!game.me.guestName) return <Shell hero><NameForm code={code} onDone={() => refresh(true)} roleName={game.role.name} /></Shell>;
+  if (!game.me.guestName) return <Shell hero><NameForm code={code} onDone={() => refresh(true)} game={game} /></Shell>;
 
   const tabs = [['home', 'Home', '⌂'], ['card', 'My Card', '✦'], ['suspects', 'Suspects', '☍'], ['clues', 'Clues', '⌕'], ['accuse', game.phase >= 5 ? 'Votes' : 'Accuse', '⚖']];
   const props = { game, code, refresh, setTab };
@@ -141,17 +165,20 @@ function Join({ onJoin, error }) {
   );
 }
 
-function NameForm({ code, onDone, roleName }) {
+function NameForm({ code, onDone, game }) {
   const [v, setV] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
   const submit = async e => {
-    e.preventDefault(); setBusy(true); setErr(null);
+    e.preventDefault(); setErr(null);
+    const taken = game.cast.some(c => c.id !== game.me.roleId && c.guestName && c.guestName.trim().toLowerCase() === v.trim().toLowerCase());
+    if (taken) { setErr('Someone already joined with that name. Add your last initial, e.g. “Sam B.”'); return; }
+    setBusy(true);
     try { await api.setName(code, v); onDone(); } catch (x) { setErr(x.message); setBusy(false); }
   };
   return (
-    <Panel kicker="You’re in" title={`You’re playing ${roleName}`}>
-      <p>First, what’s your real name? It shows on the suspect list so everyone knows who’s who.</p>
+    <Panel kicker={`You’re in · ${game.role.couple}`} title="What’s your name?">
+      <p>Use the name your friends call you. It replaces your character’s name everywhere in the story, on every phone.</p>
       {err && <Banner kind="error">{err}</Banner>}
       <form onSubmit={submit}>
         <input autoFocus maxLength={40} placeholder="Your first name" value={v} onChange={e => setV(e.target.value)} />
@@ -170,7 +197,7 @@ function Home({ game, code, refresh, onLeave, setTab }) {
         <>
           <Panel kicker={`Welcome, ${game.me.guestName}`} title={game.phase === 0 ? 'Before we begin' : round ? round.title : 'Time to accuse'}>
             {game.phase === 0 && <>
-              <p>You are playing <b>{game.role.name}</b> of <b>{game.role.couple}</b>. Read your card now, then wait for the host to start.</p>
+              <p>You and {game.cast.find(c => c.id === game.role.partner)?.name} are <b>{game.role.couple}</b>. Read your card now, then wait for the host to start.</p>
               <button className="primary" onClick={() => setTab('card')}>Read my character card</button>
             </>}
             {round && <>
@@ -226,10 +253,10 @@ function HostPanel({ game, code, refresh }) {
   };
   const share = async (c) => {
     const link = `${base}#/j/${c.code}`;
-    const text = `Your private link for Till Death Do Us Part (you're playing ${cast[c.roleId]?.name}). Don't share it! ${link}`;
+    const text = `Your private link for Till Death Do Us Part (${cast[c.roleId]?.couple}). Open it on your own phone and don't share it! ${link}`;
     try {
       if (navigator.share) await navigator.share({ text });
-      else { await navigator.clipboard.writeText(text); setMsg(`Copied ${cast[c.roleId]?.name}'s link`); }
+      else { await navigator.clipboard.writeText(text); setMsg(`Copied the link for ${cast[c.roleId]?.name}`); }
     } catch { /* cancelled */ }
   };
   const reset = async () => {
@@ -253,7 +280,7 @@ function HostPanel({ game, code, refresh }) {
             const hp = game.hostPlayers.find(p => p.roleId === c.id);
             return (
               <li key={c.id}>
-                <div><b>{c.name}</b> <span className="muted">{c.guestName ? `· ${c.guestName}` : ''}</span>
+                <div><b>{c.guestName || <span className="muted">Waiting for a guest</span>}</b> <span className="muted">· {c.character}</span>
                   <div className="small">{hp.joined ? '✓ joined' : 'not joined yet'}{game.phase === 4 ? (hp.voted ? ' · ✓ voted' : ' · waiting on vote') : ''}</div></div>
                 <button className="chip" onClick={() => share(hp)}>Send link</button>
               </li>
@@ -323,7 +350,7 @@ function Suspects({ game }) {
           <h3>{couple}</h3>
           {people.map(c => (
             <div key={c.id} className={`suspect ${c.id === game.me.roleId ? 'me' : ''}`}>
-              <div className="who"><b>{c.name}</b>{c.guestName && <span> · played by {c.guestName}</span>}{c.id === game.me.roleId && <span className="you">you</span>}</div>
+              <div className="who"><b>{c.name}</b>{!c.guestName && <span> · not joined yet</span>}{c.id === game.me.roleId && <span className="you">you</span>}</div>
               <p>{c.publicBio}</p>
               {c.id !== game.me.roleId && <textarea rows={2} placeholder={`Notes on ${c.name}…`} value={notes[c.id] || ''} onChange={e => save(c.id, e.target.value)} />}
             </div>
@@ -391,7 +418,7 @@ function Accuse({ game, code, refresh }) {
       {err && <Banner kind="error">{err}</Banner>}
       <label>Who did it?</label>
       <div className="pick">
-        {game.cast.map(c => <button key={c.id} className={d.suspect === c.id ? 'on' : ''} onClick={() => upd('suspect', c.id)}>{c.name}{c.guestName && <small>{c.guestName}</small>}</button>)}
+        {game.cast.map(c => <button key={c.id} className={d.suspect === c.id ? 'on' : ''} onClick={() => upd('suspect', c.id)}>{c.name}</button>)}
       </div>
       <label>Why did they do it?</label>
       <textarea rows={3} maxLength={1500} value={d.motive} onChange={e => upd('motive', e.target.value)} placeholder="The motive…" />
@@ -411,11 +438,10 @@ function Reveal({ game }) {
   return (
     <>
       <Panel kicker="The truth" title={`It was ${killer.name}.`} className="reveal">
-        {killer.guestName && <p className="lede">Played by {killer.guestName}.</p>}
         <Paras text={s.reveal} />
       </Panel>
       <Panel kicker="Top detectives" title={right.length ? `${right.length} of ${game.reveal.ballots.length} solved it` : 'Nobody solved it!'}>
-        {right.length ? <ul className="facts">{right.map(b => <li key={b.roleId}><b>{name(b.roleId)?.guestName || name(b.roleId)?.name}</b> ({name(b.roleId)?.name})</li>)}</ul> : <p>{killer.name} got away with it… almost.</p>}
+        {right.length ? <ul className="facts">{right.map(b => <li key={b.roleId}><b>{name(b.roleId)?.name}</b></li>)}</ul> : <p>{killer.name} got away with it… almost.</p>}
       </Panel>
       <Panel kicker="Motive & method" title="How it happened">
         <h3>Motive</h3><Paras text={s.motive} />
@@ -446,7 +472,7 @@ function Votes({ game }) {
         </div>
       </Panel>
       {game.reveal.ballots.map(b => (
-        <Panel key={b.roleId} kicker={`${c(b.roleId)?.guestName || ''} as ${c(b.roleId)?.name}`} title={`Accused ${c(b.suspect)?.name} ${b.suspect === s.killer ? '✓' : '✗'}`} className={b.suspect === s.killer ? 'right' : ''}>
+        <Panel key={b.roleId} kicker={`${c(b.roleId)?.name}’s verdict`} title={`Accused ${c(b.suspect)?.name} ${b.suspect === s.killer ? '✓' : '✗'}`} className={b.suspect === s.killer ? 'right' : ''}>
           {b.motive && <p><b>Motive:</b> {b.motive}</p>}
           {b.reasoning && <p><b>Reasoning:</b> {b.reasoning}</p>}
         </Panel>
