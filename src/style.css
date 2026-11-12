@@ -25,9 +25,9 @@ main { max-width: 640px; margin: 0 auto; padding: 12px 16px 24px; }
 .brand { font: 700 18px 'Playfair Display', serif; white-space: nowrap; }
 .phase { font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 7px; background: var(--card); border: 1px solid var(--line); padding: 6px 11px; border-radius: 99px; white-space: nowrap; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
-.dot.p1, .dot.p2, .dot.p3 { background: var(--gold); box-shadow: 0 0 0 4px #e3c08d33; }
-.dot.p4 { background: var(--red); box-shadow: 0 0 0 4px #e0697f33; }
-.dot.p5 { background: var(--green); }
+.dot.p1, .dot.p2, .dot.p3, .dot.p4, .dot.p5 { background: var(--gold); box-shadow: 0 0 0 4px #e3c08d33; }
+.dot.p6 { background: var(--red); box-shadow: 0 0 0 4px #e0697f33; }
+.dot.p7 { background: var(--green); }
 
 .panel { background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 20px 18px; margin-top: 14px; }
 .panel h2 { font: 700 26px/1.15 'Playfair Display', serif; margin: 6px 0 12px; }
@@ -125,3 +125,10 @@ form input + button { margin-top: 12px; }
 .envelope { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 100%; margin-top: 14px; padding: 22px 18px; border-radius: var(--r); border: 1px dashed var(--gold2); background: repeating-linear-gradient(135deg, #2a2030 0 12px, #261d2c 12px 24px); cursor: pointer; text-align: center; }
 .envelope b { font: 700 20px 'Playfair Display', serif; }
 .panel.innocent { border-color: var(--green); }
+
+.panel.story { border-color: var(--gold2); background: radial-gradient(130% 90% at 100% 0%, #4a2236, var(--card) 65%); }
+.panel.story p { font-size: 17px; }
+.panel.briefing { border-color: var(--gold2); }
+.steps { padding-left: 22px; margin: 4px 0 0; }
+.steps li { margin-bottom: 8px; }
+.meters { grid-template-columns: 1fr 1fr; }

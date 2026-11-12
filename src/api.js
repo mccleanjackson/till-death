@@ -35,6 +35,7 @@ export const api = {
   advance: (code, from, to) => rpc('td_advance', { p_code: code, p_from: from, p_to: to }),
   vote: (code, suspect, motive, reasoning) => rpc('td_vote', { p_code: code, p_suspect: suspect, p_motive: motive, p_reasoning: reasoning }),
   setName: (code, name) => rpc('td_set_name', { p_code: code, p_name: name }),
+  ready: (code) => rpc('td_ready', { p_code: code }),
   reset: (code) => rpc('td_reset', { p_code: code, p_confirm: 'RESET' }),
 };
 

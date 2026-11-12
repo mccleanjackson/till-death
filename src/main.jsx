@@ -4,7 +4,10 @@ import { api, configured, store } from './api.js';
 import './style.css';
 
 const POLL_MS = 3000;
-const PHASE_LABEL = ['Lobby', 'Round 1', 'Round 2', 'Round 3', 'Accusations', 'The Reveal'];
+const PHASE_LABEL = ['Lobby', 'The Story', 'Your Role', 'Round 1', 'Round 2', 'Round 3', 'Accusations', 'The Reveal'];
+// Phases: 0 lobby · 1 opening story · 2 read your role · 3-5 evidence rounds · 6 accusations · 7 reveal
+const ROUND1 = 3, ACCUSE = 6, REVEAL = 7;
+const PHASE_ARRIVAL = { 1: ['The story begins', 'home'], 2: ['Your character card is unlocked', 'card'], 3: ['Round 1 evidence is unlocked', 'clues'], 4: ['Round 2 evidence is unlocked', 'clues'], 5: ['Round 3 evidence is unlocked', 'clues'], 6: ['Accusations are open', 'accuse'], 7: ['The truth is revealed', 'home'] };
 
 // ---------- join code from link: …/#/j/ABC123 ----------
 function codeFromHash() {
@@ -91,11 +94,16 @@ function App() {
     if (!game) return;
     const prev = lastPhase.current;
     lastPhase.current = game.phase;
+    // Host reset the game (e.g. after a practice run): give this phone a clean slate.
+    if (game.phase === 0 && (prev ?? 0) > 0 || store.get(`td_seen_${game.gameId}`, 0) > game.rounds.length) {
+      if (game.phase === 0) { store.del(`td_notes_${game.gameId}`); store.del(`td_draft_${game.gameId}`); }
+      store.set(`td_seen_${game.gameId}`, game.rounds.length);
+    }
     if (prev === null || prev === game.phase || game.phase < prev) return;
-    const msg = game.phase <= 3 ? `${PHASE_LABEL[game.phase]} evidence is unlocked` : game.phase === 4 ? 'Accusations are open' : 'The truth is revealed';
+    const [msg, toTab] = PHASE_ARRIVAL[game.phase];
     setToast(msg);
     try { navigator.vibrate?.([120, 60, 120]); } catch { /* ignore */ }
-    setTab(game.phase <= 3 ? 'clues' : game.phase === 4 ? 'accuse' : 'home');
+    setTab(toTab);
     const t = setTimeout(() => setToast(null), 4500);
     return () => clearTimeout(t);
   }, [game?.phase]);
@@ -107,7 +115,7 @@ function App() {
   if (!game) return <Shell hero>{offline ? <Banner kind="warn">Can’t reach the game server. Retrying…</Banner> : <div className="loading">Opening the case file…</div>}</Shell>;
   if (!game.me.guestName) return <Shell hero><NameForm code={code} onDone={() => refresh(true)} game={game} /></Shell>;
 
-  const tabs = [['home', 'Home', '⌂'], ['card', 'My Card', '✦'], ['suspects', 'Suspects', '☍'], ['clues', 'Clues', '⌕'], ['accuse', game.phase >= 5 ? 'Votes' : 'Accuse', '⚖']];
+  const tabs = [['home', 'Home', '⌂'], ['card', 'My Card', '✦'], ['suspects', 'Suspects', '☍'], ['clues', 'Clues', '⌕'], ['accuse', game.phase >= REVEAL ? 'Votes' : 'Accuse', '⚖']];
   const props = { game, code, refresh, setTab };
   return (
     <div className="app">
@@ -128,7 +136,7 @@ function App() {
         {tabs.map(([id, label, icon]) => (
           <button key={id} className={tab === id ? 'on' : ''} onClick={() => setTab(id)}>
             <span className="ic" aria-hidden>{icon}</span><span>{label}</span>
-            {id === 'clues' && tab !== 'clues' && game.phase >= 1 && game.phase <= 3 && <NewDot game={game} />}
+            {id === 'clues' && tab !== 'clues' && game.phase >= ROUND1 && game.phase < ACCUSE && <NewDot game={game} />}
           </button>
         ))}
       </nav>
@@ -190,31 +198,52 @@ function NameForm({ code, onDone, game }) {
 
 // ---------- home ----------
 function Home({ game, code, refresh, onLeave, setTab }) {
-  const round = game.phase >= 1 && game.phase <= 3 ? game.rounds[game.phase - 1] : null;
+  const round = game.phase >= ROUND1 && game.phase < ACCUSE ? game.rounds[game.phase - ROUND1] : null;
+  const partnerName = game.cast.find(c => c.id === game.role.partner)?.name;
+  const story = (
+    <Panel kicker={game.phase === 1 ? 'Tonight’s story · read it together' : 'The case'} title={game.victim?.name || 'The victim'} className={game.phase === 1 ? 'story' : ''}>
+      {game.tagline && game.phase === 1 && <p className="small">{game.tagline}</p>}
+      {game.victim?.about && <p className="lede">{game.victim.about}</p>}
+      <Paras text={game.intro} />
+    </Panel>
+  );
+  const rules = game.howToPlay?.length > 0 && <Panel kicker="House rules" title="How to play"><ul className="rules">{game.howToPlay.map((r, i) => <li key={i}>{r}</li>)}</ul></Panel>;
   return (
     <>
-      {game.phase === 5 ? <Reveal game={game} /> : (
+      {game.phase === REVEAL ? <Reveal game={game} /> : game.phase === 0 ? (
         <>
-          <Panel kicker={`Welcome, ${game.me.guestName}`} title={game.phase === 0 ? 'Before we begin' : round ? round.title : 'Time to accuse'}>
-            {game.phase === 0 && <>
-              <p>You and {game.cast.find(c => c.id === game.role.partner)?.name} are <b>{game.role.couple}</b>. Read your card now, then wait for the host to start.</p>
-              <button className="primary" onClick={() => setTab('card')}>Read my character card</button>
+          <Panel kicker={`Welcome, ${game.me.guestName}`} title="Waiting for everyone">
+            <p>You and {partnerName} are <b>{game.role.couple}</b>.</p>
+            <p>When everyone has arrived, the host will start the night with the story of what happened. Your secret character card unlocks right after that.</p>
+            <p className="stat"><b>{game.joinedCount}</b> of {game.playerCount} guests have joined</p>
+          </Panel>
+          {rules}
+        </>
+      ) : game.phase === 1 ? (
+        <>
+          {story}
+          {rules}
+          <p className="small center">Your character card unlocks next. Hang tight for the host.</p>
+        </>
+      ) : (
+        <>
+          <Panel kicker={`Welcome, ${game.me.guestName}`} title={game.phase === 2 ? 'Read your role' : round ? round.title : 'Time to accuse'}>
+            {game.phase === 2 && <>
+              <p>Your character card is unlocked. Read it start to finish so you know who you are tonight, what you’re hiding, where you were, and what you know.</p>
+              <p className="stat"><b>{game.readyCount}</b> of {game.playerCount} guests are ready</p>
+              <button className="primary" onClick={() => setTab('card')}>{game.me.ready ? 'Review my card ✓' : 'Read my character card'}</button>
             </>}
             {round && <>
               <Paras text={round.prompt} />
               <button className="primary" onClick={() => setTab('clues')}>See the new evidence</button>
             </>}
-            {game.phase === 4 && <>
+            {game.phase === ACCUSE && <>
               <p>No more evidence is coming. Talk it through, then lock in who you think did it, why, and how you know.</p>
               <p className="stat"><b>{game.voteCount}</b> of {game.playerCount} accusations received</p>
               <button className="primary" onClick={() => setTab('accuse')}>{game.myBallot ? 'View my accusation' : 'Make my accusation'}</button>
             </>}
           </Panel>
-          <Panel kicker="The case" title={game.victim?.name || 'The victim'}>
-            {game.victim?.about && <p className="lede">{game.victim.about}</p>}
-            <Paras text={game.intro} />
-          </Panel>
-          {game.howToPlay?.length > 0 && game.phase <= 1 && <Panel kicker="House rules" title="How to play"><ul className="rules">{game.howToPlay.map((r, i) => <li key={i}>{r}</li>)}</ul></Panel>}
+          {story}
         </>
       )}
       {game.me.isHost && <HostPanel game={game} code={code} refresh={refresh} />}
@@ -227,7 +256,9 @@ function Home({ game, code, refresh, onLeave, setTab }) {
 }
 
 const NEXT = [
-  ['Start the game', 'This releases Round 1 evidence to every phone. Everyone joined and read their card?'],
+  ['Start: tell the story', 'Show the opening story on every phone? Everyone should be here first.'],
+  ['Unlock character cards', 'Unlock everyone’s secret character card?'],
+  ['Release Round 1 evidence', 'Release the first evidence to every phone?'],
   ['Release Round 2', 'Release Round 2 evidence to every phone?'],
   ['Release Round 3', 'Release the final round of evidence?'],
   ['Open accusations', 'Open accusations? No more evidence comes after this.'],
@@ -244,7 +275,8 @@ function HostPanel({ game, code, refresh }) {
   const move = async (to) => {
     const [label, ask] = to > game.phase ? NEXT[game.phase] : ['Go back', `Go back to ${PHASE_LABEL[to]}? Evidence already seen stays in people’s heads!`];
     let warn = '';
-    if (to === 5 && game.voteCount < game.playerCount) warn = `\n\nOnly ${game.voteCount} of ${game.playerCount} have voted.`;
+    if (to === REVEAL && game.voteCount < game.playerCount) warn = `\n\nOnly ${game.voteCount} of ${game.playerCount} have voted.`;
+    if (to === ROUND1 && game.readyCount < game.playerCount) warn = `\n\nOnly ${game.readyCount} of ${game.playerCount} have tapped “I’ve read my card”.`;
     if (to === 1 && game.joinedCount < game.playerCount) warn = `\n\nOnly ${game.joinedCount} of ${game.playerCount} have joined.`;
     if (!confirm(`${label}: ${ask}${warn}`)) return;
     setBusy(true); setMsg(null);
@@ -268,11 +300,11 @@ function HostPanel({ game, code, refresh }) {
     <Panel kicker="Host controls · only you see this" title={PHASE_LABEL[game.phase]} className="host">
       <div className="meters">
         <div><b>{game.joinedCount}</b><span>/{game.playerCount} joined</span></div>
-        <div><b>{game.voteCount}</b><span>/{game.playerCount} voted</span></div>
+        {game.phase >= ACCUSE ? <div><b>{game.voteCount}</b><span>/{game.playerCount} voted</span></div> : <div><b>{game.readyCount}</b><span>/{game.playerCount} ready</span></div>}
       </div>
       {msg && <Banner>{msg}</Banner>}
-      {game.phase < 5 && <button className="primary big" disabled={busy} onClick={() => move(game.phase + 1)}>{busy ? 'Working…' : NEXT[game.phase][0]}</button>}
-      {game.phase > 0 && game.phase < 5 && <button className="ghost" disabled={busy} onClick={() => move(game.phase - 1)}>Undo — go back to {PHASE_LABEL[game.phase - 1]}</button>}
+      {game.phase < REVEAL && <button className="primary big" disabled={busy} onClick={() => move(game.phase + 1)}>{busy ? 'Working…' : NEXT[game.phase][0]}</button>}
+      {game.phase > 0 && game.phase < REVEAL && <button className="ghost" disabled={busy} onClick={() => move(game.phase - 1)}>Undo — go back to {PHASE_LABEL[game.phase - 1]}</button>}
       <button className="ghost" onClick={() => setShowLinks(s => !s)}>{showLinks ? 'Hide' : 'Show'} guest links & status</button>
       {showLinks && (
         <ul className="roster">
@@ -281,25 +313,43 @@ function HostPanel({ game, code, refresh }) {
             return (
               <li key={c.id}>
                 <div><b>{c.guestName || <span className="muted">Waiting for a guest</span>}</b> <span className="muted">· {c.character}</span>
-                  <div className="small">{hp.joined ? '✓ joined' : 'not joined yet'}{game.phase === 4 ? (hp.voted ? ' · ✓ voted' : ' · waiting on vote') : ''}</div></div>
+                  <div className="small">{hp.joined ? '✓ joined' : 'not joined yet'}{game.phase === 2 ? (hp.ready ? ' · ✓ read card' : ' · still reading') : ''}{game.phase === ACCUSE ? (hp.voted ? ' · ✓ voted' : ' · waiting on vote') : ''}</div></div>
                 <button className="chip" onClick={() => share(hp)}>Send link</button>
               </li>
             );
           })}
         </ul>
       )}
-      {(game.gameId === 'practice' || game.phase === 5) && <button className="link danger" onClick={reset}>Reset this game to the lobby</button>}
+      {(game.gameId === 'practice' || game.phase === REVEAL) && <button className="link danger" onClick={reset}>Reset this game to the lobby</button>}
     </Panel>
   );
 }
 
 // ---------- my card ----------
-function Card({ game }) {
+function Card({ game, code, refresh }) {
   const r = game.role;
   const partner = game.cast.find(c => c.id === r.partner);
   const rounds = Object.entries(r.roundInfo || {}).sort(([a], [b]) => a - b);
+  const [busy, setBusy] = useState(false);
+  if (r.sealed) return (
+    <Panel kicker="Sealed" title="Your card is still locked">
+      <p>Everyone unlocks their character at the same time, right after the opening story. The host will release it soon.</p>
+    </Panel>
+  );
+  const ready = async () => { setBusy(true); try { await api.ready(code); } catch { /* retry on next tap */ } await refresh(true); setBusy(false); };
   return (
     <>
+      {game.phase === 2 && !game.me.ready && (
+        <Panel kicker="Your briefing" title="Get to know your role" className="briefing">
+          <ol className="steps">
+            <li>Open your <b>sealed envelope</b> (nobody looking!).</li>
+            <li>Read <b>who you are</b> and your couple’s story with {partner?.name}.</li>
+            <li>Remember your <b>secret</b> and your <b>alibi</b>.</li>
+            <li>Note <b>what you know</b>. Other people need it to solve the case.</li>
+            <li>Tap <b>I’ve read my card</b> at the bottom.</li>
+          </ol>
+        </Panel>
+      )}
       <Panel kicker={`${r.couple} · married to ${partner?.name}`} title={r.name} className="card">
         <p className="lede">{r.publicBio}</p>
         <p className="small">Everyone can see the line above. Everything below is private: don’t show your screen.</p>
@@ -313,6 +363,9 @@ function Card({ game }) {
       {r.knows?.length > 0 && <Panel kicker="Share these when it helps you" title="What you know"><ul className="facts">{r.knows.map((k, i) => <li key={i}>{k}</li>)}</ul></Panel>}
       {r.goals?.length > 0 && <Panel kicker="Little missions" title="Your goals tonight"><ul className="facts">{r.goals.map((k, i) => <li key={i}>{k}</li>)}</ul></Panel>}
       <p className="small center">Innocent players may hide secrets but should never lie about evidence.</p>
+      {game.phase === 2 && (game.me.ready
+        ? <Panel className="locked" kicker="Ready ✓" title="You’re all set"><p>The first evidence drops when everyone is ready. Your card stays here all night.</p></Panel>
+        : <button className="primary big" disabled={busy} onClick={ready}>{busy ? 'Saving…' : 'I’ve read my card'}</button>)}
     </>
   );
 }
@@ -396,7 +449,7 @@ function Accuse({ game, code, refresh }) {
   const upd = (k, v) => { const n = { ...d, [k]: v }; setD(n); store.set(draftKey, n); };
   const name = id => game.cast.find(c => c.id === id)?.name;
 
-  if (game.phase >= 5) return <Votes game={game} />;
+  if (game.phase >= REVEAL) return <Votes game={game} />;
   if (game.myBallot) return (
     <Panel kicker="Locked in ✓" title={`You accused ${name(game.myBallot.suspect)}`} className="locked">
       {game.myBallot.motive && <><h3>Motive</h3><Paras text={game.myBallot.motive} /></>}
@@ -411,7 +464,7 @@ function Accuse({ game, code, refresh }) {
     catch (e) { setErr(e.message); }
     await refresh(true); setBusy(false);
   };
-  const open = game.phase === 4;
+  const open = game.phase === ACCUSE;
   return (
     <Panel kicker={open ? 'Accusations are open' : 'Opens after Round 3'} title="Make your accusation">
       {!open && <p>You can draft your theory now. It saves on this phone. Sending unlocks when the host opens accusations.</p>}

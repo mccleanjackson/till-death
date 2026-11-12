@@ -53,15 +53,14 @@ await Promise.all(ids.map((id, i) => rpc('td_set_name', codes[id], `Guest ${i + 
 ok((await rpc('td_state', host, null)).cast.every(c => c.guestName), 'names show in cast');
 ok(await err(rpc('td_set_name', host, '   ')) === 'BAD_NAME', 'blank name rejected');
 
-// Secrets: only the killer sees killerBrief; nobody sees the solution yet
+// Lobby: cards are sealed for everyone, nothing secret is sent
 for (const id of ids) {
   const s = await rpc('td_state', codes[id], null);
-  ok(!!s.role.killerBrief === (id === killer), `killerBrief only for killer (${id})`);
-  ok(!s.reveal, `no reveal in lobby (${id})`);
-  if (id !== killer) ok(!leaks(s), `no solution text leaks to ${id}`);
-  ok(s.rounds.length === 0, 'no evidence in lobby');
-  ok(!JSON.stringify(s.cast).includes('"secret"'), 'cast has no secrets');
+  ok(s.role.sealed && !s.role.secret && !s.role.killerBrief, `card sealed in lobby (${id})`);
+  ok(!leaks(s), `no secret text in lobby (${id})`);
+  ok(!s.reveal && s.rounds.length === 0, `no reveal or evidence in lobby (${id})`);
 }
+ok(await err(rpc('td_ready', codes[ids[0]])) === 'NOT_YET', 'cannot mark ready before cards unlock');
 
 // Phase control
 const nonHost = codes[ids.find(id => id !== hostRole)];
@@ -71,12 +70,30 @@ const v0 = (await rpc('td_state', host, null)).version;
 const race = await Promise.allSettled([rpc('td_advance', host, 0, 1), rpc('td_advance', host, 0, 1)]);
 ok(race.filter(r => r.status === 'fulfilled').length === 1, 'double-tap advances only once');
 ok(await err(rpc('td_advance', host, 1, 3)) === 'BAD_PHASE', 'cannot skip phases');
-const s1 = await rpc('td_state', host, null);
-ok(s1.phase === 1 && s1.version > v0 && s1.rounds.length === 1, 'round 1 released');
-ok((await rpc('td_state', host, s1.version)).unchanged === true, 'unchanged poll is cheap');
-for (const p of [2, 3, 4]) await rpc('td_advance', host, p - 1, p);
+const sOpen = await rpc('td_state', codes[ids[3]], null);
+ok(sOpen.phase === 1 && sOpen.version > v0 && sOpen.intro && sOpen.role.sealed && sOpen.rounds.length === 0, 'opening story: intro shown, card still sealed');
+ok((await rpc('td_state', host, sOpen.version)).unchanged === true, 'unchanged poll is cheap');
+
+// Read-your-role phase: cards unlock, killerBrief only for killer, ready check-ins
+await rpc('td_advance', host, 1, 2);
+for (const id of ids) {
+  const s = await rpc('td_state', codes[id], null);
+  ok(!s.role.sealed && s.role.secret, `card unlocked (${id})`);
+  ok(!!s.role.killerBrief === (id === killer), `killerBrief only for killer (${id})`);
+  ok(!s.reveal && s.rounds.length === 0, `no evidence or reveal while reading roles (${id})`);
+  if (id !== killer) ok(!leaks(s), `no solution text leaks to ${id}`);
+  ok(!JSON.stringify(s.cast).includes('"secret"'), 'cast has no secrets');
+}
+await Promise.all(ids.slice(0, 7).map(id => rpc('td_ready', codes[id])));
+await rpc('td_ready', codes[ids[0]]); // idempotent
+const sReady = await rpc('td_state', host, null);
+ok(sReady.readyCount === 7 && sReady.hostPlayers.filter(p => p.ready).length === 7, `ready count 7 (got ${sReady.readyCount})`);
+
+await rpc('td_advance', host, 2, 3);
+ok((await rpc('td_state', host, null)).rounds.length === 1, 'round 1 released at phase 3');
+for (const p of [4, 5, 6]) await rpc('td_advance', host, p - 1, p);
 const s4 = await rpc('td_state', codes[ids[2]], null);
-ok(s4.phase === 4 && s4.rounds.length === 3, 'all three rounds visible during accusations');
+ok(s4.phase === 6 && s4.rounds.length === 3, 'all three rounds visible during accusations');
 const r3 = story.roles.find(r => r.id === ids[2]).roundInfo || {};
 ok(Object.keys(s4.role.roundInfo).length === Object.values(r3).filter(Boolean).length, 'round info unlocked');
 
@@ -90,17 +107,17 @@ ok(sv.voteCount === 10 && sv.myBallot?.suspect === killer, 'vote count + my ball
 ok(!sv.reveal && !leaks(sv) || ids[0] === killer, 'still no reveal while voting');
 
 // Reveal
-await rpc('td_advance', host, 4, 5);
+await rpc('td_advance', host, 6, 7);
 const s5 = await rpc('td_state', codes[ids[5]], null);
 ok(s5.reveal?.solution?.killer === killer && s5.reveal.ballots.length === 10, 'reveal shows solution + ballots');
-ok(await err(rpc('td_advance', host, 5, 6)) === 'BAD_PHASE', 'nothing after reveal');
+ok(await err(rpc('td_advance', host, 7, 8)) === 'BAD_PHASE', 'nothing after reveal');
 
 // Reset (rehearsal)
 ok(await err(rpc('td_reset', host, 'nah')) === 'CONFIRM_REQUIRED', 'reset needs confirmation');
 ok(await err(rpc('td_reset', nonHost, 'RESET')) === 'NOT_HOST', 'only host resets');
 await rpc('td_reset', host, 'RESET');
 const sr = await rpc('td_state', host, null);
-ok(sr.phase === 0 && sr.voteCount === 0 && sr.joinedCount === 10, 'reset to lobby, players kept');
+ok(sr.phase === 0 && sr.voteCount === 0 && sr.readyCount === 0 && sr.joinedCount === 10, 'reset to lobby, players kept');
 
 console.log(`${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

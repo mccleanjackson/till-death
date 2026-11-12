@@ -21,7 +21,7 @@ await db.exec(readFileSync(join(root, 'supabase/schema.sql'), 'utf8'));
 await db.exec(readFileSync(join(dir, 'seed.sql'), 'utf8'));
 await db.exec('grant usage on schema public to anon; set role anon;');
 
-const ALLOWED = new Set(['td_state', 'td_advance', 'td_vote', 'td_set_name', 'td_reset']);
+const ALLOWED = new Set(['td_state', 'td_advance', 'td_vote', 'td_set_name', 'td_reset', 'td_ready']);
 const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'POST, OPTIONS' };
 let queue = Promise.resolve(); // PGlite is single-connection; serialise requests
 
