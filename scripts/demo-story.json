@@ -5,7 +5,7 @@
     "name": "Aunt Bev's Envelope",
     "about": "A thick gold envelope holding $2,000 for the 'Newlyweds of the Year'. It was supposed to be the highlight of brunch."
   },
-  "intro": "PRACTICE GAME — this warm-up is not the real mystery.\n\nIt's Saturday brunch at Aunt Bev's lake house. Aunt Bev has invited all five newlywed couples and, as usual, has planned far too much: a mimosa bar, three kinds of powdered donuts, and a hand-laminated 'Newlywed Quiz'.\n\nThe real reason everyone came is sitting in the sunroom on the gift table: a fat gold envelope labelled NEWLYWEDS OF THE YEAR. Inside, Aunt Bev says, is $2,000 for whichever couple 'shows the most love and the least attitude'. She will announce the winner at 11:30 AM.\n\nThe sunroom sits past the kitchen at the back of the house. The only way in is through the kitchen. At 10:50 AM Aunt Bev rings a little bell and herds everyone into the living room for the quiz.\n\nThe couples are smiling. The couples are also very, very competitive.",
+  "intro": "PRACTICE GAME — this warm-up is not the real mystery.\n\nIt's Saturday brunch at Aunt Bev's lake house. Aunt Bev has invited all six newlywed couples and, as usual, has planned far too much: a mimosa bar, three kinds of powdered donuts, and a hand-laminated 'Newlywed Quiz'.\n\nThe real reason everyone came is sitting in the sunroom on the gift table: a fat gold envelope labelled NEWLYWEDS OF THE YEAR. Inside, Aunt Bev says, is $2,000 for whichever couple 'shows the most love and the least attitude'. Bev will announce the winner at 11:30 AM.\n\nThe sunroom sits past the kitchen at the back of the house. The only way in is through the kitchen. At 10:50 AM Aunt Bev rings a little bell and herds everyone into the living room for the quiz.\n\nThe couples are smiling. The couples are also very, very competitive.",
   "event": {
     "title": "The Empty Envelope",
     "text": "At 11:30 AM Aunt Bev clinks a glass, walks into the sunroom to fetch the prize, and comes back holding the gold envelope.\n\nIt is empty.\n\nThe flap is torn open. There is a faint smudge of white powder on the corner. Aunt Bev's voice goes very quiet, which everyone knows is far worse than yelling: 'Nobody is leaving this house until my two thousand dollars comes back.'\n\nSomebody in this room took it. It happened during brunch, and almost certainly while everyone was supposed to be doing the quiz.",
@@ -90,7 +90,7 @@
         "2": "",
         "3": ""
       },
-      "killerBrief": "PRACTICE: You took the money. At 11:02 AM you left the quiz, saying you were getting donuts. You grabbed Drew's jacket from the hall, walked through the kitchen to the sunroom, tore open the envelope (your fingers had donut sugar on them), stuffed the cash in the jacket pocket, and were back by 11:08 AM. Blame the broke couple. You may lie about where you went, but if someone proves you went past the kitchen counter, admit you 'looked in the sunroom for napkins'."
+      "killerBrief": "PRACTICE: You took the money. At 11:02 AM you left the quiz, saying you were getting donuts. You grabbed Drew's jacket from the hall, walked through the kitchen to the sunroom, tore open the envelope (your fingers had donut sugar on them), stuffed the cash in the jacket pocket, and were back by 11:08 AM. Blame the broke couple. You may lie about where you went, but if someone proves you went past the kitchen counter, admit you 'looked in the sunroom for napkins'. One more thing: someone at brunch has their own reasons to get the family blaming the wrong person. They don't know it was you, but they may help you without realizing it."
     },
     {
       "id": "drew",
@@ -259,14 +259,71 @@
         "3": ""
       },
       "killerBrief": null
+    },
+    {
+      "id": "kendall",
+      "name": "Kendall",
+      "couple": "The Eloped Couple",
+      "partner": "morgan",
+      "publicBio": "Keeps glancing across the lake at the house with the bigger dock.",
+      "background": "You and Morgan eloped six weeks ago, and this is your first brunch at Bev's lake house. For the quiz you grabbed the big couch facing the living room doorway.",
+      "secret": "Pat Lindgren, who lives directly across the lake, has been feuding with Bev for eleven years over a dock, a property line and a pie contest. Pat has offered you $100 to make sure today's brunch ends with the family furious at each other. You said yes. Morgan doesn't know.",
+      "alibi": "From 10:50 AM to 11:10 AM you sat on the big couch in the living room doing the quiz with Morgan. You answered every question, and half the answers are in your handwriting.",
+      "knows": [
+        "At 10:50 AM, just as the bell rang, you saw Jasmine hurry in from the direction of the kitchen, wiping their hands on their jeans and looking guilty about something.",
+        "Ellis left the quiz at about 10:55 AM and came back at about 10:57 AM holding napkins, with hands covered in white powdered sugar.",
+        "Harper ducked out of the quiz almost as soon as it started. You could see Harper out on the front porch, on the phone.",
+        "Finley has asked three different people this morning how much Bev's house is worth."
+      ],
+      "goals": [
+        "Earn Pat's $100 without anyone finding out about the deal.",
+        "Get at least two couples bickering with each other.",
+        "Keep Morgan from finding out who you keep texting."
+      ],
+      "roundInfo": {
+        "1": "The envelope (1C) has white powdered sugar on it. You saw whose hands were covered in powdered sugar at 10:57 AM. Say so, loudly. And if the only way to the sunroom is through the kitchen (1B), wonder aloud why the person making mimosas in that kitchen didn't stop anybody.",
+        "2": "The score sheet (2A) shows which couples skipped questions. Make Ellis and Finley's gap sound as long as possible, and remind everyone that Harper missed most of the quiz. If anyone brings up the donut box (2B), point out that Ellis was standing at that counter too.",
+        "3": "The cash turned up in a jacket in the hall closet (3A). The hall closet is on the way to the kitchen, and anyone could have reached it. Suggest the money was planted there to frame the jacket's owner. You still don't know who did it: watch who the room is closing in on, and hand them someone else to look at."
+      },
+      "killerBrief": null,
+      "optional": true,
+      "accompliceBrief": "PRACTICE: You are the accomplice. You're not behind anything that happens today, and you don't know who is. Your deal with Pat is simple: if anything goes wrong at brunch today and Bev demands to know who's responsible, Pat pays you $100 if the family blames the wrong person. You win if the group's top accusation at the end lands on anyone EXCEPT the real culprit.\n\nTactics:\n- You don't know who did it, so watch where the clues point and pull attention away from that person.\n- Point at the obvious suspects: whoever left the quiz, whoever needs money most, whoever has sugar on their hands.\n- Make small things sound big: Jasmine hurrying in from the kitchen at 10:50 AM, Harper ducking out of the quiz, Finley pricing the house.\n- If someone builds a strong case, poke holes in it: \"Couldn't anyone have planted that?\"\n\nSpecial permission: the usual rule says innocent players never lie. You're the exception. You may lie about the Pat deal, about what time people left or came back to the quiz, and about how long they were gone. You may not fake an exhibit.\n\nIf someone catches you, confess dramatically. You still win if the family's final top accusation is wrong."
+    },
+    {
+      "id": "morgan",
+      "name": "Morgan",
+      "couple": "The Eloped Couple",
+      "partner": "kendall",
+      "publicBio": "Brought homemade lemonade in a glass dispenser and won't stop refilling your cup.",
+      "background": "You and Kendall eloped six weeks ago, and this is your first brunch at Bev's lake house. You would love to win. The biggest thing you've ever won is a raffle ham.",
+      "secret": "You told Bev that if you win the $2,000, you'll donate every cent to the Lake Cleanup Fund. You have no intention of doing that. You've already picked out a kayak.",
+      "alibi": "From 10:50 AM to 11:10 AM you sat on the big couch in the living room doing the quiz with Kendall. You never got up.",
+      "knows": [
+        "From the couch you could see the hallway. At about 11:02 AM Cameron got up \"for donuts,\" and a moment later you heard the hall closet door creak open.",
+        "Cameron came back at about 11:08 AM and sat down very fast.",
+        "Kendall has been texting someone named Pat all morning and flips the phone over whenever you look."
+      ],
+      "goals": [
+        "Keep the charity promise quiet.",
+        "Find out who Pat is.",
+        "Get someone to call your lemonade the best thing at brunch."
+      ],
+      "roundInfo": {
+        "1": "",
+        "2": "Thinking back, nobody touched the hall closet during the quiz until that creak, right after Cameron left the quiz at about 11:02 AM.",
+        "3": ""
+      },
+      "killerBrief": null,
+      "optional": true
     }
   ],
   "coupleStories": {
-    "The Polished Planners": "You are Aunt Bev's favourites and you planned this brunch with her. Winning would confirm what everyone already knows.",
+    "The Polished Planners": "You are Aunt Bev's favourites and you planned this brunch with Bev. Winning would confirm what everyone already knows.",
     "The Competitive Couple": "You compete at everything. You both believe the contest is rigged for the Planners.",
     "The Broke College Couple": "Free food is a love language. $2,000 would cover rent for two months.",
     "The Online-Famous Couple": "Everything is content. A win would make a great video.",
-    "The Quiet Couple": "You notice things. Nobody ever suspects the quiet ones."
+    "The Quiet Couple": "You notice things. Nobody ever suspects the quiet ones.",
+    "The Eloped Couple": "You eloped in Las Vegas after three months of dating, and Bev still believes it was a candlelit chapel ceremony. The 'wedding photo' on Bev's fridge has been lightly edited. This is your first brunch at the lake house, and you'd both like to be invited back."
   },
   "rounds": [
     {
@@ -297,7 +354,7 @@
         {
           "id": "2A",
           "title": "Quiz score sheet",
-          "body": "Ellis and Finley skipped one question (about 10:55 AM–10:57 AM). Questions 6–8 (about 11:02 AM–11:08 AM) for Cameron and Drew are in Drew's handwriting only."
+          "body": "Ellis and Finley skipped one question (about 10:55 AM–10:57 AM). Questions 6–8 (about 11:02 AM–11:08 AM) for Cameron and Drew are in Drew's handwriting only. Kendall and Morgan answered every question, in both of their handwriting."
         },
         {
           "id": "2B",
@@ -331,6 +388,7 @@
     "timeline": [
       "10:45 AM — envelope sealed (Gray's photo)",
       "10:49 AM — Jasmine sees it still sealed",
+      "10:50 AM — Jasmine hurries back from the kitchen as the quiz starts (Kendall sees it)",
       "10:55 AM–10:57 AM — Ellis gets napkins and never goes past the counter",
       "11:02 AM — Cameron walks past the donuts into the sunroom",
       "11:04 AM — Finley hears paper tearing",
@@ -341,13 +399,18 @@
       "Ellis was gone just two minutes and never went past the counter (Tessa, Finley, 2A).",
       "Harper was on the porch the whole time (Gray, call log).",
       "Cameron walked past the donuts to 'get donuts' (Tessa, 2B) during the 11:04 AM tearing sound (Finley).",
-      "The cash was in Drew's jacket, which Cameron was suddenly wearing (Blair, Drew, 3A), and Cameron owed exactly $2,000 (3B)."
+      "The cash was in Drew's jacket, which Cameron was suddenly wearing (Blair, Drew, 3A), and Cameron owed exactly $2,000 (3B).",
+      "Kendall and Morgan never left the quiz (2A), and Morgan heard the hall closet creak right after Cameron left."
     ],
     "redHerrings": [
       "Ellis had sugar all over their hands from a secret donut stash, but was only gone two minutes.",
       "Harper was missing from the quiz but stayed on the front porch on a sponsor call.",
-      "Jasmine was in the sunroom at 10:49 AM, but only to hide a broken swan, and the envelope was still sealed."
+      "Jasmine was in the sunroom at 10:49 AM, but only to hide a broken swan, and the envelope was still sealed.",
+      "Morgan wanted the $2,000 for a kayak despite promising it to charity, but never left the couch (2A).",
+      "Kendall kept stirring up suspicion because of a secret deal with Pat across the lake, but never left the quiz (2A)."
     ],
-    "reveal": "The envelope was safe at 10:49 AM. The only way to it was through Tessa's kitchen. Ellis came for napkins and left. Then Cameron strolled in 'for donuts', walked straight past the donut box, and vanished into the sunroom just as Finley heard paper tearing. Cameron came back wearing Drew's jacket on an 80-degree day, and the cash turned up in its pocket, dusted in sugar. The reason? A secret honeymoon upgrade with $2,000 due Monday. Cameron, Aunt Bev would like a word. Practice over. The real mystery is a lot harder!"
+    "reveal": "The envelope was safe at 10:49 AM. The only way to it was through Tessa's kitchen. Ellis came for napkins and left. Then Cameron strolled in 'for donuts', walked straight past the donut box, and vanished into the sunroom just as Finley heard paper tearing. Cameron came back wearing Drew's jacket on an 80-degree day, and the cash turned up in its pocket, dusted in sugar. The reason? A secret honeymoon upgrade with $2,000 due Monday. Cameron, Aunt Bev would like a word. Meanwhile, Kendall was being paid by Pat across the lake to get you all blaming the wrong person, and Morgan had promised the prize to the Lake Cleanup Fund while shopping for a kayak. Practice over. The real mystery is a lot harder!",
+    "accomplice": "kendall",
+    "accompliceReveal": "Kendall was the accomplice. Pat Lindgren, Bev's rival across the lake, had promised Kendall $100 if brunch ended with the family blaming the wrong person. Kendall had no idea who took the money, so Kendall just kept pointing at sugary hands, empty quiz seats and anyone who'd been near the kitchen, hoping you'd all turn on each other. Pat is still waiting on the dock for good news."
   }
 }

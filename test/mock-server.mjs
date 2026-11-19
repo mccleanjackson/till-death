@@ -21,7 +21,7 @@ await db.exec(readFileSync(join(root, 'supabase/schema.sql'), 'utf8'));
 await db.exec(readFileSync(join(dir, 'seed.sql'), 'utf8'));
 await db.exec('grant usage on schema public to anon; set role anon;');
 
-const ALLOWED = new Set(['td_state', 'td_advance', 'td_vote', 'td_set_name', 'td_reset', 'td_ready']);
+const ALLOWED = new Set(['td_state', 'td_advance', 'td_vote', 'td_set_name', 'td_reset', 'td_ready', 'td_join_info', 'td_join']);
 const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'POST, OPTIONS' };
 let queue = Promise.resolve(); // PGlite is single-connection; serialise requests
 
@@ -49,4 +49,5 @@ createServer((req, res) => {
 }).listen(PORT, () => {
   console.log(`Mock Supabase on http://localhost:${PORT}`);
   for (const [role, code] of Object.entries(codes.party)) console.log(`  ${role.padEnd(8)} ${code}${role === 'avery' ? '  (host)' : ''}`);
+  console.log('  Join links appear in the host panel (scan-to-join).');
 });

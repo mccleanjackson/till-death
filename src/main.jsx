@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import QRCode from 'qrcode';
 import { api, configured, store } from './api.js';
 import './style.css';
 
@@ -12,6 +13,14 @@ const PHASE_ARRIVAL = { 1: ['The story begins', 'home'], 2: ['Your character car
 // ---------- join code from link: …/#/j/ABC123 ----------
 function codeFromHash() {
   const m = location.hash.match(/#\/?j\/([A-Za-z0-9-]+)/);
+  if (!m) return null;
+  history.replaceState(null, '', location.pathname + location.search);
+  return m[1].toUpperCase();
+}
+
+// Shared scan-to-join link: …/#/join/XYZ789 (from the QR code on the host's phone)
+function joinFromHash() {
+  const m = location.hash.match(/#\/?join\/([A-Za-z0-9-]+)/);
   if (!m) return null;
   history.replaceState(null, '', location.pathname + location.search);
   return m[1].toUpperCase();
@@ -75,6 +84,7 @@ function useGame(code) {
 
 // ---------- app ----------
 function App() {
+  const [joinCode, setJoinCode] = useState(() => joinFromHash());
   const [code, setCode] = useState(() => { const c = codeFromHash(); if (c) store.set('td_code', c); return c || store.get('td_code'); });
   const { game: rawGame, error, offline, refresh } = useGame(code);
   const game = useMemo(() => personalize(rawGame), [rawGame]);
@@ -83,11 +93,16 @@ function App() {
   const lastPhase = useRef(null);
 
   useEffect(() => {
-    const onHash = () => { const c = codeFromHash(); if (c) { store.set('td_code', c); lastPhase.current = null; setCode(c); } };
+    const onHash = () => {
+      const j = joinFromHash(); if (j) { setJoinCode(j); return; }
+      const c = codeFromHash(); if (c) { store.set('td_code', c); lastPhase.current = null; setCode(c); }
+    };
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
   useEffect(() => store.set('td_tab', tab), [tab]);
+  // Remember this phone's seat per game, so scanning the QR code again goes straight back to it.
+  useEffect(() => { if (game?.gameId && code) store.set(`td_mycode_${game.gameId}`, code); }, [game?.gameId, code]);
   useEffect(() => { window.scrollTo(0, 0); }, [tab]);
 
   // Announce phase changes
@@ -113,6 +128,8 @@ function App() {
   const leave = () => { store.del('td_code'); setCode(null); setTab('home'); lastPhase.current = null; };
 
   if (!configured) return <Shell><Panel title="Setup needed"><p>Add <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code> to <code>.env</code> and rebuild.</p></Panel></Shell>;
+  const enter = c => { store.set('td_code', c); lastPhase.current = null; setJoinCode(null); setCode(c); };
+  if (joinCode) return <Shell hero><QuickJoin joinCode={joinCode} onJoined={enter} onCancel={() => setJoinCode(null)} /></Shell>;
   if (!code || error?.code === 'INVALID_CODE') return <Shell hero><Join error={error && code ? error.message : null} onJoin={c => { store.set('td_code', c); setCode(c); }} /></Shell>;
   if (!game) return <Shell hero>{offline ? <Banner kind="warn">Can’t reach the game server. Retrying…</Banner> : <div className="loading">Opening the case file…</div>}</Shell>;
   if (!game.me.guestName) return <Shell hero><NameForm code={code} onDone={() => refresh(true)} game={game} /></Shell>;
@@ -153,7 +170,7 @@ function NewDot({ game }) {
 
 // ---------- shells ----------
 function Shell({ children, hero }) {
-  return <div className="app">{hero && <header className="hero"><div className="eyebrow">A murder mystery for five couples</div><h1>Till Death<br /><em>Do Us Part</em></h1></header>}<main>{children}</main></div>;
+  return <div className="app">{hero && <header className="hero"><div className="eyebrow">A murder mystery for couples</div><h1>Till Death<br /><em>Do Us Part</em></h1></header>}<main>{children}</main></div>;
 }
 const Panel = ({ title, kicker, children, className = '' }) => <section className={`panel ${className}`}>{kicker && <div className="kicker">{kicker}</div>}{title && <h2>{title}</h2>}{children}</section>;
 const Banner = ({ kind = 'info', children }) => <div className={`banner ${kind}`}>{children}</div>;
@@ -164,7 +181,7 @@ function Join({ onJoin, error }) {
   const clean = v.toUpperCase().replace(/[^A-Z0-9]/g, '');
   return (
     <Panel title="Enter the investigation">
-      <p>Tap the personal link the host sent you, or type the 6-character code from it.</p>
+      <p>Scan the QR code on the host’s phone, or type your 6-character personal code.</p>
       {error && <Banner kind="error">{error}</Banner>}
       <form onSubmit={e => { e.preventDefault(); if (clean.length >= 6) onJoin(clean); }}>
         <input className="code" inputMode="text" autoCapitalize="characters" autoComplete="off" autoCorrect="off" spellCheck="false" maxLength={8} placeholder="ABC123" value={v} onChange={e => setV(e.target.value)} />
@@ -173,6 +190,59 @@ function Join({ onJoin, error }) {
       <p className="small">Your code is private. It unlocks your character and nobody else’s.</p>
     </Panel>
   );
+}
+
+// Scan-to-join: pick a name (and optionally sit with your partner), get a random seat.
+function QuickJoin({ joinCode, onJoined, onCancel }) {
+  const [info, setInfo] = useState(null);
+  const [err, setErr] = useState(null);
+  const [name, setName] = useState('');
+  const [partner, setPartner] = useState('');
+  const [busy, setBusy] = useState(false);
+  const load = useCallback(async () => {
+    try {
+      const i = await api.joinInfo(joinCode);
+      const mine = store.get(`td_mycode_${i.gameId}`);
+      if (mine) return onJoined(mine); // this phone already has a seat in this game
+      setInfo(i); setErr(null);
+    } catch (x) { setErr(x.message); }
+  }, [joinCode]);
+  useEffect(() => { load(); }, [load]);
+  const submit = async e => {
+    e.preventDefault(); setBusy(true); setErr(null);
+    try { const r = await api.join(joinCode, name, partner); store.set(`td_mycode_${r.gameId}`, r.code); onJoined(r.code); }
+    catch (x) { setErr(x.message); setBusy(false); if (x.code === 'PARTNER_TAKEN') { setPartner(''); load(); } }
+  };
+  if (!info) return err
+    ? <Panel title="Couldn’t join"><Banner kind="error">{err}</Banner><button className="ghost" onClick={onCancel}>I have a personal code instead</button></Panel>
+    : <div className="loading">Finding your seat…</div>;
+  if (info.open === 0) return <Panel title="The party is full"><p>Every seat is taken. If you already joined on another phone, ask the host to send you your personal link.</p></Panel>;
+  return (
+    <Panel kicker={info.title} title="Join the party">
+      <p>You’ll get a secret character. Your real name replaces the character’s name everywhere in the story.</p>
+      {err && <Banner kind="error">{err}</Banner>}
+      <form onSubmit={submit}>
+        <label className="small">Your name</label>
+        <input autoFocus maxLength={40} placeholder="Your first name" value={name} onChange={e => setName(e.target.value)} />
+        {info.partners.length > 0 && <>
+          <label className="small">Is your partner already in? Pick them so you play a couple together.</label>
+          <select value={partner} onChange={e => setPartner(e.target.value)}>
+            <option value="">No, I’m first (or solo)</option>
+            {info.partners.map(p => <option key={p.roleId} value={p.roleId}>{p.name}</option>)}
+          </select>
+        </>}
+        <button className="primary" disabled={busy || !name.trim()}>{busy ? 'Finding your seat…' : 'Join'}</button>
+      </form>
+      <p className="small">Coming as a couple? One of you joins first, then the other picks them from the list.</p>
+    </Panel>
+  );
+}
+
+// Big QR code the host shows; guests scan it to join.
+function JoinQR({ url }) {
+  const [svg, setSvg] = useState('');
+  useEffect(() => { QRCode.toString(url, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' }).then(setSvg).catch(() => setSvg('')); }, [url]);
+  return <div className="qr" aria-label="QR code to join" dangerouslySetInnerHTML={{ __html: svg }} />;
 }
 
 function NameForm({ code, onDone, game }) {
@@ -284,7 +354,8 @@ const NEXT = [
 function HostPanel({ game, code, refresh }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
-  const [showLinks, setShowLinks] = useState(game.phase === 0);
+  const [showLinks, setShowLinks] = useState(false);
+  const [showQR, setShowQR] = useState(game.phase === 0);
   const cast = Object.fromEntries(game.cast.map(c => [c.id, c]));
   const base = location.origin + location.pathname;
 
@@ -293,7 +364,7 @@ function HostPanel({ game, code, refresh }) {
     let warn = '';
     if (to === REVEAL && game.voteCount < game.playerCount) warn = `\n\nOnly ${game.voteCount} of ${game.playerCount} have voted.`;
     if (to === DISCOVERY && game.readyCount < game.playerCount) warn = `\n\nOnly ${game.readyCount} of ${game.playerCount} have tapped “I’ve read my card”.`;
-    if (to === 1 && game.joinedCount < game.playerCount) warn = `\n\nOnly ${game.joinedCount} of ${game.playerCount} have joined. Empty seats will appear in the story as “Guest 3”, “Guest 7” and so on.`;
+    if (to === 1 && game.requiredOpen > 0) warn = `\n\n${game.requiredOpen} main character${game.requiredOpen === 1 ? ' is' : 's are'} still unclaimed. Empty seats appear in the story as “Guest 3”, “Guest 7” and so on.`;
     if (!confirm(`${label}: ${ask}${warn}`)) return;
     setBusy(true); setMsg(null);
     try { await api.advance(code, game.phase, to); } catch (e) { setMsg(e.message); }
@@ -321,7 +392,18 @@ function HostPanel({ game, code, refresh }) {
       {msg && <Banner>{msg}</Banner>}
       {game.phase < REVEAL && <button className="primary big" disabled={busy} onClick={() => move(game.phase + 1)}>{busy ? 'Working…' : NEXT[game.phase][0]}</button>}
       {game.phase > 0 && game.phase < REVEAL && <button className="ghost" disabled={busy} onClick={() => move(game.phase - 1)}>Undo — go back to {PHASE_LABEL[game.phase - 1]}</button>}
-      <button className="ghost" onClick={() => setShowLinks(s => !s)}>{showLinks ? 'Hide' : 'Show'} guest links & status</button>
+      <button className="ghost" onClick={() => setShowQR(s => !s)}>{showQR ? 'Hide' : 'Show'} QR code for guests to join</button>
+      {showQR && game.joinCode && (() => {
+        const url = `${base}#/join/${game.joinCode}`;
+        return (
+          <div className="joinbox">
+            <JoinQR url={url} />
+            <p className="small">Guests scan this with their phone camera and get a random character. Couples: one joins first, the other picks them from a list. Scanning again on the same phone goes back to the same character.</p>
+            <button className="chip" onClick={async () => { try { if (navigator.share) await navigator.share({ text: `Join Till Death Do Us Part: ${url}` }); else { await navigator.clipboard.writeText(url); setMsg('Join link copied'); } } catch { /* cancelled */ } }}>Share join link instead</button>
+          </div>
+        );
+      })()}
+      <button className="ghost" onClick={() => setShowLinks(s => !s)}>{showLinks ? 'Hide' : 'Show'} guest list & personal links</button>
       {showLinks && (
         <ul className="roster">
           {game.cast.map(c => {
@@ -370,7 +452,7 @@ function Card({ game, code, refresh }) {
         <p className="lede">{r.publicBio}</p>
         <p className="small">Everyone can see the line above. Everything below is private: don’t show your screen.</p>
       </Panel>
-      <Envelope killerBrief={r.killerBrief} />
+      <Envelope killerBrief={r.killerBrief} accompliceBrief={r.accompliceBrief} hasAccomplice={game.hasAccomplice} />
       {rounds.length > 0 && <Panel kicker="New memories" title="What you’ve remembered">{rounds.map(([n, t]) => <div key={n} className="memory"><div className="tag">Round {n}</div><Paras text={t} /></div>)}</Panel>}
       {r.background && <Panel kicker="Who you are tonight" title="Background"><Paras text={r.background} /></Panel>}
       {r.coupleStory && <Panel kicker={`Shared with ${partner?.name}`} title="Your couple’s story"><Paras text={r.coupleStory} /></Panel>}
@@ -387,7 +469,7 @@ function Card({ game, code, refresh }) {
 }
 
 // Every player gets the same sealed envelope so a glance at someone's screen gives nothing away.
-function Envelope({ killerBrief }) {
+function Envelope({ killerBrief, accompliceBrief, hasAccomplice }) {
   const [open, setOpen] = useState(false);
   if (!open) return (
     <button className="envelope" onClick={() => setOpen(true)}>
@@ -396,9 +478,12 @@ function Envelope({ killerBrief }) {
       <span className="small">Make sure nobody is looking at your screen.</span>
     </button>
   );
-  return killerBrief
-    ? <Panel kicker="Top secret · tap to hide" title="You are the murderer" className="killer"><div onClick={() => setOpen(false)}><Paras text={killerBrief} /></div></Panel>
-    : <Panel kicker="Top secret · tap to hide" title="You are innocent" className="innocent"><div onClick={() => setOpen(false)}><p>You did not kill anyone. You may dodge questions about your secret, but never lie about evidence. Help catch the real murderer.</p></div></Panel>;
+  if (killerBrief) return <Panel kicker="Top secret · tap to hide" title="You are the murderer" className="killer"><div onClick={() => setOpen(false)}><Paras text={killerBrief} /></div></Panel>;
+  if (accompliceBrief) return <Panel kicker="Top secret · tap to hide" title="You are the accomplice" className="killer"><div onClick={() => setOpen(false)}><Paras text={accompliceBrief} /><p><b>You win if the group accuses the wrong person.</b> You don’t know who the murderer is, and they don’t know it’s you. You may lie.</p></div></Panel>;
+  return <Panel kicker="Top secret · tap to hide" title="You are innocent" className="innocent"><div onClick={() => setOpen(false)}>
+    <p>You did not kill anyone. You may dodge questions about your secret, but never lie about evidence. Help catch the real murderer.</p>
+    {hasAccomplice && <p><b>Watch out:</b> someone here is secretly working to send the investigation the wrong way. They don’t know who the murderer is either, and they’re allowed to lie.</p>}
+  </div></Panel>;
 }
 
 // ---------- suspects ----------
@@ -413,7 +498,7 @@ function Suspects({ game }) {
   }, [game.cast]);
   return (
     <>
-      <Panel kicker="Ten guests · five couples" title="The suspects"><p>Your notes save on this phone only. Nobody else sees them.</p></Panel>
+      <Panel kicker={`${game.cast.length} guests · ${game.cast.length / 2} couples`} title="The suspects"><p>Your notes save on this phone only. Nobody else sees them.</p></Panel>
       {couples.map(([couple, people]) => (
         <section key={couple} className="couple">
           <h3>{couple}</h3>
@@ -488,7 +573,7 @@ function Timeline({ game }) {
     if (game.event) add(game.event.text, 'Discovery');
     const r = game.role || {};
     if (!r.sealed) {
-      for (const f of ['background', 'secret', 'alibi', 'coupleStory', 'killerBrief']) add(r[f], 'My card');
+      for (const f of ['background', 'secret', 'alibi', 'coupleStory', 'killerBrief', 'accompliceBrief']) add(r[f], 'My card');
       for (const k of r.knows || []) add(k, 'My card');
       for (const [n, t] of Object.entries(r.roundInfo || {})) add(t, `My memory · R${n}`);
     }
@@ -555,11 +640,22 @@ function Reveal({ game }) {
   const killer = game.cast.find(c => c.id === s.killer);
   const right = game.reveal.ballots.filter(b => b.suspect === s.killer);
   const name = id => game.cast.find(c => c.id === id);
+  // The murderer is caught if they got the most accusations (ties count as caught).
+  const tally = {};
+  for (const b of game.reveal.ballots) tally[b.suspect] = (tally[b.suspect] || 0) + 1;
+  const caught = (tally[s.killer] || 0) > 0 && (tally[s.killer] || 0) >= Math.max(0, ...Object.values(tally));
+  const acc = s.accomplice && game.cast.find(c => c.id === s.accomplice);
   return (
     <>
       <Panel kicker="The truth" title={`It was ${killer.name}.`} className="reveal">
         <Paras text={s.reveal} />
       </Panel>
+      {acc?.joined && (
+        <Panel kicker="The accomplice" title={`${acc.name} was working against you`} className={caught ? '' : 'killer'}>
+          <p><b>{caught ? 'The group still caught the murderer. The accomplice loses.' : `The group didn’t land on ${killer.name}. The accomplice wins!`}</b></p>
+          <Paras text={s.accompliceReveal} />
+        </Panel>
+      )}
       <Panel kicker="Top detectives" title={right.length ? `${right.length} of ${game.reveal.ballots.length} solved it` : 'Nobody solved it!'}>
         {right.length ? <ul className="facts">{right.map(b => <li key={b.roleId}><b>{name(b.roleId)?.name}</b></li>)}</ul> : <p>{killer.name} got away with it… almost.</p>}
       </Panel>

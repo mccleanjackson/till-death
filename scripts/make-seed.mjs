@@ -7,14 +7,13 @@ import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { randomInt } from 'node:crypto';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { checkStory, ROLE_IDS } from './story-check.mjs';
+import { checkStory } from './story-check.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const privateDir = process.env.TD_PRIVATE_DIR || resolve(here, '../../private');
 const arg = (name, dflt) => { const i = process.argv.indexOf(`--${name}`); return i > 0 ? process.argv[i + 1] : dflt; };
 const hostRole = arg('host', 'avery');
 const siteUrl = arg('url', 'http://localhost:5173/').replace(/\/?$/, '/');
-if (!ROLE_IDS.includes(hostRole)) throw Error(`--host must be one of ${ROLE_IDS.join(', ')}`);
 
 const storyPath = resolve(privateDir, 'story.json');
 if (!existsSync(storyPath)) throw Error(`Missing ${storyPath}`);
@@ -22,13 +21,19 @@ const stories = {
   party: JSON.parse(readFileSync(storyPath, 'utf8')),
   practice: JSON.parse(readFileSync(resolve(here, 'demo-story.json'), 'utf8')),
 };
+// Optional 12-player version of the party story (adds an accomplice and one more guest).
+const story12Path = resolve(privateDir, 'story12.json');
+if (existsSync(story12Path)) stories.party12 = JSON.parse(readFileSync(story12Path, 'utf8'));
 // Each game plays one of the stories. party2/practice2 are a second, independent copy for another host.
-const GAMES = { party: 'party', practice: 'practice', party2: 'party', practice2: 'practice' };
+const GAMES = { party: 'party', practice: 'practice', party2: stories.party12 ? 'party12' : 'party', practice2: 'practice' };
 const problems = Object.entries(stories).flatMap(([k, s]) => checkStory(s, k));
 if (problems.length) { console.error(problems.join('\n')); process.exit(1); }
-if (stories.party.solution.killer === hostRole) {
-  console.error('The host role cannot be the murderer in the party story. Pick a different --host.');
-  process.exit(1);
+for (const [k, st] of Object.entries(stories)) {
+  if (!st.roles.some(r => r.id === hostRole)) { console.error(`--host ${hostRole} is not a role in ${k}`); process.exit(1); }
+  if ([st.solution.killer, st.solution.accomplice].includes(hostRole) || st.roles.find(r => r.id === hostRole).optional) {
+    console.error(`The host can't be the culprit, the accomplice or an optional seat in ${k}. Pick a different --host.`);
+    process.exit(1);
+  }
 }
 
 // Invite codes are generated once and reused, so re-running the seed never breaks links already sent.
@@ -37,9 +42,10 @@ const newCode = () => Array.from({ length: 6 }, () => ALPHABET[randomInt(ALPHABE
 const codesPath = resolve(privateDir, 'codes.json');
 const codes = existsSync(codesPath) ? JSON.parse(readFileSync(codesPath, 'utf8')) : {};
 const used = new Set(Object.values(codes).flatMap(Object.values));
+const roleIds = game => stories[GAMES[game]].roles.map(r => r.id);
 for (const game of Object.keys(GAMES)) {
   codes[game] ??= {};
-  for (const id of ROLE_IDS) {
+  for (const id of roleIds(game)) {
     if (!codes[game][id]) { let c; do c = newCode(); while (used.has(c)); used.add(c); codes[game][id] = c; }
   }
 }
@@ -52,8 +58,9 @@ for (const [id, story] of Object.entries(stories)) {
   sql += `insert into td_private.stories (id, blob) values (${q(id)}, ${q(blob)}) on conflict (id) do update set blob = excluded.blob;\n`;
 }
 for (const [game, storyId] of Object.entries(GAMES)) {
-  sql += `insert into td_private.games (id, story_id) values (${q(game)}, ${q(storyId)}) on conflict (id) do nothing;\n`;
-  for (const id of ROLE_IDS) {
+  // A game may switch story only while it is still in the lobby.
+  sql += `insert into td_private.games (id, story_id) values (${q(game)}, ${q(storyId)}) on conflict (id) do update set story_id = excluded.story_id where td_private.games.phase = 0;\n`;
+  for (const id of roleIds(game)) {
     sql += `insert into td_private.players (code, game_id, role_id, is_host) values (${q(codes[game][id])}, ${q(game)}, ${q(id)}, ${id === hostRole}) on conflict (code) do update set is_host = excluded.is_host;\n`;
   }
   sql += `update td_private.games set version = version + 1 where id = ${q(game)};\n`;

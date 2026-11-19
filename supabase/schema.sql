@@ -48,6 +48,8 @@ create table if not exists td_private.ballots (
 alter table td_private.players add column if not exists ready_at timestamptz;
 alter table td_private.games drop constraint if exists games_phase_check;
 alter table td_private.games add constraint games_phase_check check (phase between 0 and 8);
+-- One shared join code per game: guests scan the host's QR code and get a free seat automatically.
+alter table td_private.games add column if not exists join_code text unique;
 
 alter table td_private.stories enable row level security;
 alter table td_private.games   enable row level security;
@@ -74,6 +76,20 @@ create or replace function td_private.bump(p_game text) returns void
 language sql as $$
   update td_private.games set version = version + 1, updated_at = now() where id = p_game
 $$;
+
+create or replace function td_private.clean(p_code text) returns text
+language sql immutable as $$ select upper(regexp_replace(coalesce(p_code, ''), '[^A-Za-z0-9]', '', 'g')) $$;
+
+create or replace function td_private.new_code() returns text
+language plpgsql as $$
+declare a text := 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; c text;
+begin
+  loop
+    c := (select string_agg(substr(a, 1 + floor(random() * length(a))::int, 1), '') from generate_series(1, 6));
+    exit when not exists (select 1 from td_private.players where code = c) and not exists (select 1 from td_private.games where join_code = c);
+  end loop;
+  return c;
+end $$;
 
 -- ---------- public API ----------
 
@@ -116,6 +132,7 @@ begin
              from jsonb_array_elements(s->'roles') with ordinality t(e, i)
              left join td_private.players pl on pl.game_id = g.id and pl.role_id = e->>'id'),
     'rounds', coalesce((select jsonb_agg(e order by i) from jsonb_array_elements(s->'rounds') with ordinality t(e, i) where i <= rnd), '[]'::jsonb),
+    'hasAccomplice', g.phase >= 2 and exists (select 1 from td_private.players where game_id = g.id and role_id = s->'solution'->>'accomplice' and joined_at is not null),
     'joinedCount', (select count(*) from td_private.players where game_id = g.id and joined_at is not null),
     'readyCount', (select count(*) from td_private.players where game_id = g.id and ready_at is not null),
     'playerCount', (select count(*) from td_private.players where game_id = g.id),
@@ -129,7 +146,13 @@ begin
         'roleId', pl.role_id, 'code', pl.code, 'guestName', pl.guest_name, 'joined', pl.joined_at is not null, 'ready', pl.ready_at is not null,
         'voted', exists(select 1 from td_private.ballots b where b.game_id = g.id and b.role_id = pl.role_id)) order by pl.role_id)
       from td_private.players pl where pl.game_id = g.id);
-    out := out || jsonb_build_object('hostPlayers', host_extra);
+    if g.join_code is null then
+      update td_private.games set join_code = td_private.new_code() where id = g.id returning join_code into g.join_code;
+    end if;
+    out := out || jsonb_build_object('hostPlayers', host_extra, 'joinCode', g.join_code,
+      'requiredOpen', (select count(*) from jsonb_array_elements(s->'roles') e
+                       join td_private.players pl on pl.game_id = g.id and pl.role_id = e->>'id'
+                       where pl.joined_at is null and not coalesce((e->>'optional')::boolean, false)));
   end if;
 
   if g.phase >= 8 then
@@ -140,6 +163,55 @@ begin
     out := out || jsonb_build_object('reveal', reveal);
   end if;
   return out;
+end $$;
+
+-- What the join screen needs: the game's title and who is already here (so a partner can sit with them).
+create or replace function public.td_join_info(p_join text) returns jsonb
+language plpgsql security definer set search_path = td_private, pg_temp as $$
+declare g td_private.games; s jsonb;
+begin
+  select * into g from td_private.games where join_code = td_private.clean(p_join);
+  if not found then raise exception 'INVALID_JOIN'; end if;
+  s := td_private.story(g.story_id);
+  return jsonb_build_object(
+    'gameId', g.id, 'title', s->'title', 'tagline', s->'tagline',
+    'open', (select count(*) from td_private.players where game_id = g.id and joined_at is null and not is_host),
+    -- people already here whose partner seat is still free
+    'partners', coalesce((select jsonb_agg(jsonb_build_object('roleId', pl.role_id, 'name', pl.guest_name) order by pl.guest_name)
+       from td_private.players pl
+       join jsonb_array_elements(s->'roles') e on e->>'id' = pl.role_id
+       join td_private.players mate on mate.game_id = g.id and mate.role_id = e->>'partner'
+       where pl.game_id = g.id and pl.joined_at is not null and pl.guest_name is not null and mate.joined_at is null and not mate.is_host), '[]'::jsonb));
+end $$;
+
+-- Claim a free seat. With p_partner, sit as that guest's partner; otherwise a random seat,
+-- filling required characters before optional ones and keeping fully empty couples for couples.
+create or replace function public.td_join(p_join text, p_name text, p_partner text default null) returns jsonb
+language plpgsql security definer set search_path = td_private, pg_temp as $$
+declare g td_private.games; s jsonb; v text := btrim(coalesce(p_name, '')); seat text;
+begin
+  select * into g from td_private.games where join_code = td_private.clean(p_join) for update;  -- one join at a time per game
+  if not found then raise exception 'INVALID_JOIN'; end if;
+  if length(v) < 1 or length(v) > 40 then raise exception 'BAD_NAME'; end if;
+  if exists (select 1 from td_private.players where game_id = g.id and lower(btrim(guest_name)) = lower(v)) then raise exception 'NAME_TAKEN'; end if;
+  s := td_private.story(g.story_id);
+  if nullif(p_partner, '') is not null then
+    select pl.code into seat from jsonb_array_elements(s->'roles') e
+      join td_private.players pl on pl.game_id = g.id and pl.role_id = e->>'partner'
+      where e->>'id' = p_partner and pl.joined_at is null and not pl.is_host;
+    if seat is null then raise exception 'PARTNER_TAKEN'; end if;
+  else
+    select pl.code into seat from td_private.players pl
+      join jsonb_array_elements(s->'roles') e on e->>'id' = pl.role_id
+      left join td_private.players mate on mate.game_id = g.id and mate.role_id = e->>'partner'
+      where pl.game_id = g.id and pl.joined_at is null and not pl.is_host
+      order by coalesce((e->>'optional')::boolean, false), (mate.joined_at is null and not coalesce(mate.is_host, false)) desc, random()
+      limit 1;
+    if seat is null then raise exception 'GAME_FULL'; end if;
+  end if;
+  update td_private.players set guest_name = v, joined_at = now() where code = seat;
+  perform td_private.bump(g.id);
+  return jsonb_build_object('code', seat, 'gameId', g.id);
 end $$;
 
 -- Host moves the game one step forward or back. p_from guards against double taps / two hosts racing.
@@ -216,10 +288,12 @@ begin
   return jsonb_build_object('ok', true);
 end $$;
 
--- Lock down: only the six public functions are callable by browsers.
+-- Lock down: only the public td_* functions are callable by browsers.
 revoke all on all tables in schema td_private from public;
 revoke all on all functions in schema td_private from public;
 revoke execute on function public.td_state(text, int), public.td_advance(text, int, int), public.td_vote(text, text, text, text),
-  public.td_set_name(text, text), public.td_reset(text, text), public.td_ready(text) from public;
+  public.td_set_name(text, text), public.td_reset(text, text), public.td_ready(text),
+  public.td_join_info(text), public.td_join(text, text, text) from public;
 grant execute on function public.td_state(text, int), public.td_advance(text, int, int), public.td_vote(text, text, text, text),
-  public.td_set_name(text, text), public.td_reset(text, text), public.td_ready(text) to anon, authenticated;
+  public.td_set_name(text, text), public.td_reset(text, text), public.td_ready(text),
+  public.td_join_info(text), public.td_join(text, text, text) to anon, authenticated;

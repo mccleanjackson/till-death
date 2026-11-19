@@ -14,7 +14,9 @@ const dir = mkdtempSync(join(tmpdir(), 'td-test-'));
 copyFileSync(storyFile, join(dir, 'story.json'));
 const hostRole = story.solution.killer === 'avery' ? 'blair' : 'avery';
 execFileSync('node', [join(root, 'scripts/make-seed.mjs'), '--host', hostRole], { env: { ...process.env, TD_PRIVATE_DIR: dir }, stdio: 'ignore' });
-const codes = JSON.parse(readFileSync(join(dir, 'codes.json'), 'utf8')).party;
+const allCodes = JSON.parse(readFileSync(join(dir, 'codes.json'), 'utf8'));
+const codes = allCodes.party;
+const demo = JSON.parse(readFileSync(join(root, 'scripts/demo-story.json'), 'utf8'));
 
 const db = new PGlite();
 await db.exec(`create role anon nologin; create role authenticated nologin;`);
@@ -33,7 +35,9 @@ const err = async (p) => { try { await p; return null; } catch (e) { return e.me
 const ids = story.roles.map(r => r.id);
 const killer = story.solution.killer;
 const host = codes[hostRole];
-const secretNeedles = [story.solution.summary, story.solution.reveal, story.roles.find(r => r.id === killer).killerBrief];
+const n = ids.length;
+const accomplice = story.solution.accomplice;
+const secretNeedles = [story.solution.summary, story.solution.reveal, story.roles.find(r => r.id === killer).killerBrief, story.solution.accompliceReveal].filter(Boolean);
 const leaks = (state) => secretNeedles.some(n => JSON.stringify(state).includes(n));
 
 // Browser can't touch private data directly
@@ -44,8 +48,10 @@ ok(await err(db.query(`select td_private.story('party')`)), 'anon must not call 
 const states = await Promise.all(ids.map(id => rpc('td_state', codes[id], null)));
 ok(states.every(s => s.phase === 0), 'everyone starts in lobby');
 const fresh = await rpc('td_state', host, null);
-ok(fresh.joinedCount === 10, `joinedCount 10 (got ${fresh.joinedCount})`);
-ok(Array.isArray(fresh.hostPlayers) && fresh.hostPlayers.length === 10, 'host sees player list');
+ok(fresh.joinedCount === n, `joinedCount ${n} (got ${fresh.joinedCount})`);
+ok(Array.isArray(fresh.hostPlayers) && fresh.hostPlayers.length === n, 'host sees player list');
+ok(/^[A-Z2-9]{6}$/.test(fresh.joinCode) && fresh.requiredOpen === 0, 'host gets a join code');
+ok(!states.find(s => s.me.roleId !== hostRole && s.joinCode), 'non-hosts do not see the join code');
 ok(!states.find(s => s.me.roleId !== hostRole && s.hostPlayers), 'non-hosts do not see codes');
 ok(await err(rpc('td_state', 'NOPE12', null)) === 'INVALID_CODE', 'wrong code rejected');
 ok((await rpc('td_state', codes[ids[1]].toLowerCase().split('').join(' '), null)).me.roleId === ids[1], 'code is case/space tolerant');
@@ -80,6 +86,8 @@ for (const id of ids) {
   const s = await rpc('td_state', codes[id], null);
   ok(!s.role.sealed && s.role.secret, `card unlocked (${id})`);
   ok(!!s.role.killerBrief === (id === killer), `killerBrief only for killer (${id})`);
+  ok(!!s.role.accompliceBrief === (id === accomplice), `accompliceBrief only for accomplice (${id})`);
+  ok(s.hasAccomplice === !!accomplice, `hasAccomplice flag (${id})`);
   ok(!s.reveal && s.rounds.length === 0 && !s.event, `no evidence, discovery or reveal while reading roles (${id})`);
   if (id !== killer) ok(!leaks(s), `no solution text leaks to ${id}`);
   ok(!JSON.stringify(s.cast).includes('"secret"'), 'cast has no secrets');
@@ -101,18 +109,18 @@ const r3 = story.roles.find(r => r.id === ids[2]).roundInfo || {};
 ok(Object.keys(s4.role.roundInfo).length === Object.values(r3).filter(Boolean).length, 'round info unlocked');
 
 // Voting
-const votes = await Promise.all(ids.map((id, i) => rpc('td_vote', codes[id], i < 6 ? killer : ids[(i + 1) % 10], 'motive', 'because')));
-ok(votes.every(v => v.ok), 'all ten votes accepted');
+const votes = await Promise.all(ids.map((id, i) => rpc('td_vote', codes[id], i < 6 ? killer : ids[(i + 1) % n], 'motive', 'because')));
+ok(votes.every(v => v.ok), `all ${n} votes accepted`);
 ok(await err(rpc('td_vote', codes[ids[0]], ids[3], 'x', 'y')) === 'ALREADY_VOTED', 'cannot change vote');
 ok(await err(rpc('td_vote', codes[ids[0]], 'nobody', 'x', 'y')) !== null, 'bad suspect rejected');
 const sv = await rpc('td_state', codes[ids[0]], null);
-ok(sv.voteCount === 10 && sv.myBallot?.suspect === killer, 'vote count + my ballot');
+ok(sv.voteCount === n && sv.myBallot?.suspect === killer, 'vote count + my ballot');
 ok(!sv.reveal && !leaks(sv) || ids[0] === killer, 'still no reveal while voting');
 
 // Reveal
 await rpc('td_advance', host, 7, 8);
 const s5 = await rpc('td_state', codes[ids[5]], null);
-ok(s5.reveal?.solution?.killer === killer && s5.reveal.ballots.length === 10, 'reveal shows solution + ballots');
+ok(s5.reveal?.solution?.killer === killer && s5.reveal.ballots.length === n, 'reveal shows solution + ballots');
 ok(await err(rpc('td_advance', host, 8, 9)) === 'BAD_PHASE', 'nothing after reveal');
 
 // Reset (rehearsal)
@@ -120,7 +128,42 @@ ok(await err(rpc('td_reset', host, 'nah')) === 'CONFIRM_REQUIRED', 'reset needs 
 ok(await err(rpc('td_reset', nonHost, 'RESET')) === 'NOT_HOST', 'only host resets');
 await rpc('td_reset', host, 'RESET');
 const sr = await rpc('td_state', host, null);
-ok(sr.phase === 0 && sr.voteCount === 0 && sr.readyCount === 0 && sr.joinedCount === 10, 'reset to lobby, players kept');
+ok(sr.phase === 0 && sr.voteCount === 0 && sr.readyCount === 0 && sr.joinedCount === n, 'reset to lobby, players kept');
+
+// Scan-to-join on the practice game: random seats, couples together, optional seats last, host never assigned
+{
+  const pc = allCodes.practice, roles = demo.roles, byId = Object.fromEntries(roles.map(r => [r.id, r]));
+  const owner = Object.fromEntries(Object.entries(pc).map(([id, c]) => [c, id]));
+  const ph = await rpc('td_state', pc[hostRole], null);
+  await rpc('td_set_name', pc[hostRole], 'Host');
+  const jc = ph.joinCode;
+  ok(await err(rpc('td_join_info', 'ZZZZZZ')) === 'INVALID_JOIN', 'bad join code rejected');
+  const info = await rpc('td_join_info', jc.toLowerCase());
+  ok(info.gameId === 'practice' && info.open === roles.length - 1 && info.partners.length === 1 && info.partners[0].name === 'Host', 'join info: open seats + host as partner option');
+  ok(!Object.values(pc).some(c => JSON.stringify(info).includes(c)), 'join info leaks no codes');
+  const a = await rpc('td_join', jc, 'Sam', null);
+  const aRole = owner[a.code];
+  ok(aRole && aRole !== hostRole && !byId[aRole].optional, 'first joiner gets a main character');
+  ok(byId[aRole].partner !== hostRole, 'solo joiner is not seated with the host');
+  ok(await err(rpc('td_join', jc, ' sam ', null)) === 'NAME_TAKEN', 'duplicate name rejected');
+  ok(await err(rpc('td_join', jc, '', null)) === 'BAD_NAME', 'blank name rejected at join');
+  const b = await rpc('td_join', jc, 'Pat', aRole);
+  ok(owner[b.code] === byId[aRole].partner, 'partner pick seats the couple together');
+  ok(await err(rpc('td_join', jc, 'Lee', aRole)) === 'PARTNER_TAKEN', 'taken partner seat rejected');
+  const hp = await rpc('td_join', jc, 'Hostmate', hostRole);
+  ok(owner[hp.code] === byId[hostRole].partner, "host's partner can sit with the host");
+  const order = [];
+  for (let i = 0; ; i++) {
+    const e = await err(rpc('td_join', jc, `Guest ${i}`, null).then(r => order.push(owner[r.code])));
+    if (e) { ok(e === 'GAME_FULL', `full game rejects (${e})`); break; }
+  }
+  const optional = roles.filter(r => r.optional).map(r => r.id);
+  ok(order.length === roles.length - 4 && !order.includes(hostRole), 'every remaining seat filled exactly once');
+  ok(optional.every(id => order.slice(-optional.length).includes(id)), 'optional seats are filled last');
+  const after = await rpc('td_state', pc[hostRole], null);
+  ok(after.joinedCount === roles.length && after.requiredOpen === 0 && after.cast.every(c => c.guestName), 'everyone joined with names');
+  ok((await rpc('td_state', a.code, null)).me.guestName === 'Sam', 'joined player sees their own name');
+}
 
 console.log(`${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -1,6 +1,6 @@
 # Till Death Do Us Part — live murder mystery
 
-A phone-first, synchronized murder mystery for 10 guests (5 couples). Everyone opens a personal link on their phone; the host releases evidence rounds, opens accusations and reveals the murderer from the same app — no paper.
+A phone-first, synchronized murder mystery for 10 or 12 guests (couples). Guests scan the host’s QR code (or open a personal link); the host releases evidence rounds, opens accusations and reveals the murderer from the same app — no paper.
 
 **Stack:** React + Vite static site (GitHub Pages) → Supabase free tier (Postgres functions). No billing, no service-account keys.
 

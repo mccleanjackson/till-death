@@ -12,6 +12,10 @@ const FRIENDLY = {
   VOTING_CLOSED: 'Accusations aren’t open right now.',
   ALREADY_VOTED: 'Your accusation is already locked in.',
   BAD_NAME: 'Please enter a name (up to 40 characters).',
+  INVALID_JOIN: 'That QR code isn’t for a game that exists any more. Ask the host to show it again.',
+  NAME_TAKEN: 'Someone already joined with that name. If that was you on another phone, ask the host to send your link. Otherwise add your last initial, e.g. “Sam B.”',
+  PARTNER_TAKEN: 'Someone already took that seat. Pick again.',
+  GAME_FULL: 'Every seat is taken. Ask the host.',
 };
 
 export class GameError extends Error {
@@ -36,6 +40,8 @@ export const api = {
   vote: (code, suspect, motive, reasoning) => rpc('td_vote', { p_code: code, p_suspect: suspect, p_motive: motive, p_reasoning: reasoning }),
   setName: (code, name) => rpc('td_set_name', { p_code: code, p_name: name }),
   ready: (code) => rpc('td_ready', { p_code: code }),
+  joinInfo: (join) => rpc('td_join_info', { p_join: join }),
+  join: (join, name, partner) => rpc('td_join', { p_join: join, p_name: name, p_partner: partner || null }),
   reset: (code) => rpc('td_reset', { p_code: code, p_confirm: 'RESET' }),
 };
 
