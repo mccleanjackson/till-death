@@ -263,7 +263,7 @@ function Home({ game, code, refresh, onLeave, setTab }) {
       )}
       {game.me.isHost && <HostPanel game={game} code={code} refresh={refresh} />}
       <div className="foot">
-        <span>{game.gameId === 'practice' ? 'Practice game' : 'Party game'} · {game.joinedCount}/{game.playerCount} joined</span>
+        <span>{game.gameId?.startsWith('practice') ? 'Practice game' : 'Party game'} · {game.joinedCount}/{game.playerCount} joined</span>
         <button className="link" onClick={() => { if (confirm('Leave this game on this phone? You can rejoin with your link.')) onLeave(); }}>Switch code</button>
       </div>
     </>
@@ -336,7 +336,7 @@ function HostPanel({ game, code, refresh }) {
           })}
         </ul>
       )}
-      {(game.gameId === 'practice' || game.phase === REVEAL) && <button className="link danger" onClick={reset}>Reset this game to the lobby</button>}
+      {(game.gameId?.startsWith('practice') || game.phase === REVEAL) && <button className="link danger" onClick={reset}>Reset this game to the lobby</button>}
     </Panel>
   );
 }
