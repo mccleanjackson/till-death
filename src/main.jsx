@@ -487,18 +487,22 @@ function Envelope({ killerBrief, accompliceBrief, hasAccomplice }) {
 }
 
 // ---------- suspects ----------
+// Optional seats (the extra couple in a 12-player story) only count as suspects once someone plays them.
+const inPlay = game => game.cast.filter(c => c.joined || !c.optional);
+
 function Suspects({ game }) {
   const key = `td_notes_${game.gameId}`;
   const [notes, setNotes] = useState(() => store.get(key, {}));
   const save = (id, v) => { const n = { ...notes, [id]: v }; setNotes(n); store.set(key, n); };
   const couples = useMemo(() => {
     const m = new Map();
-    for (const c of game.cast) { if (!m.has(c.couple)) m.set(c.couple, []); m.get(c.couple).push(c); }
+    for (const c of inPlay(game)) { if (!m.has(c.couple)) m.set(c.couple, []); m.get(c.couple).push(c); }
     return [...m];
   }, [game.cast]);
+  const people = couples.reduce((n, [, p]) => n + p.length, 0);
   return (
     <>
-      <Panel kicker={`${game.cast.length} guests · ${game.cast.length / 2} couples`} title="The suspects"><p>Your notes save on this phone only. Nobody else sees them.</p></Panel>
+      <Panel kicker={`${people} guests · ${couples.length} couples`} title="The suspects"><p>Your notes save on this phone only. Nobody else sees them.</p></Panel>
       {couples.map(([couple, people]) => (
         <section key={couple} className="couple">
           <h3>{couple}</h3>
@@ -600,6 +604,8 @@ function Accuse({ game, code, refresh }) {
   const [err, setErr] = useState(null);
   const upd = (k, v) => { const n = { ...d, [k]: v }; setD(n); store.set(draftKey, n); };
   const name = id => game.cast.find(c => c.id === id)?.name;
+  const suspects = inPlay(game);
+  const suspect = suspects.some(c => c.id === d.suspect) ? d.suspect : ''; // ignore a draft pick that's no longer in play
 
   if (game.phase >= REVEAL) return <Votes game={game} />;
   if (game.myBallot) return (
@@ -610,9 +616,9 @@ function Accuse({ game, code, refresh }) {
     </Panel>
   );
   const submit = async () => {
-    if (!confirm(`Accuse ${name(d.suspect)}? You can’t change it afterwards.`)) return;
+    if (!confirm(`Accuse ${name(suspect)}? You can’t change it afterwards.`)) return;
     setBusy(true); setErr(null);
-    try { await api.vote(code, d.suspect, d.motive, d.reasoning); store.del(draftKey); }
+    try { await api.vote(code, suspect, d.motive, d.reasoning); store.del(draftKey); }
     catch (e) { setErr(e.message); }
     await refresh(true); setBusy(false);
   };
@@ -623,13 +629,13 @@ function Accuse({ game, code, refresh }) {
       {err && <Banner kind="error">{err}</Banner>}
       <label>Who did it?</label>
       <div className="pick">
-        {game.cast.map(c => <button key={c.id} className={d.suspect === c.id ? 'on' : ''} onClick={() => upd('suspect', c.id)}>{c.name}</button>)}
+        {suspects.map(c => <button key={c.id} className={suspect === c.id ? 'on' : ''} onClick={() => upd('suspect', c.id)}>{c.name}</button>)}
       </div>
       <label>Why did they do it?</label>
       <textarea rows={3} maxLength={1500} value={d.motive} onChange={e => upd('motive', e.target.value)} placeholder="The motive…" />
       <label>How do you know? Cite the clues.</label>
       <textarea rows={5} maxLength={2000} value={d.reasoning} onChange={e => upd('reasoning', e.target.value)} placeholder="e.g. Exhibit 2A shows… and Blair said…" />
-      <button className="primary big" disabled={!open || busy || !d.suspect} onClick={submit}>{busy ? 'Sending…' : open ? 'Lock in my accusation' : 'Waiting for the host'}</button>
+      <button className="primary big" disabled={!open || busy || !suspect} onClick={submit}>{busy ? 'Sending…' : open ? 'Lock in my accusation' : 'Waiting for the host'}</button>
     </Panel>
   );
 }

@@ -165,5 +165,31 @@ ok(sr.phase === 0 && sr.voteCount === 0 && sr.readyCount === 0 && sr.joinedCount
   ok((await rpc('td_state', a.code, null)).me.guestName === 'Sam', 'joined player sees their own name');
 }
 
+// Only 10 guests in a 12-seat game (practice2): the optional couple stays empty and doesn't count
+{
+  const pc = allCodes.practice2, roles = demo.roles, optional = roles.filter(r => r.optional).map(r => r.id);
+  const owner = Object.fromEntries(Object.entries(pc).map(([id, c]) => [c, id]));
+  const seats = [pc[hostRole]];
+  const jc = (await rpc('td_state', pc[hostRole], null)).joinCode;
+  for (let i = 1; i < 10; i++) seats.push((await rpc('td_join', jc, `Ten ${i}`, null)).code);
+  ok(seats.every(c => !optional.includes(owner[c])), '10 guests fill the 10 main characters');
+  let s = await rpc('td_state', pc[hostRole], null);
+  ok(s.joinedCount === 10 && s.playerCount === 10 && s.requiredOpen === 0, `10 of 10 joined (got ${s.joinedCount}/${s.playerCount})`);
+  ok(optional.every(id => s.cast.find(c => c.id === id)?.optional && !s.cast.find(c => c.id === id).joined), 'cast marks empty optional seats');
+  for (let p = 1; p <= 2; p++) await rpc('td_advance', pc[hostRole], p - 1, p);
+  const all = await Promise.all(seats.map(c => rpc('td_state', c, null)));
+  ok(all.every(x => !x.hasAccomplice && !x.role.accompliceBrief), 'no accomplice when that seat is empty');
+  ok(all.some(x => x.role.killerBrief), 'murderer is seated');
+  await Promise.all(seats.map(c => rpc('td_ready', c)));
+  ok((await rpc('td_state', pc[hostRole], null)).readyCount === 10, '10 of 10 ready');
+  for (let p = 3; p <= 7; p++) await rpc('td_advance', pc[hostRole], p - 1, p);
+  ok(await err(rpc('td_vote', seats[1], optional[0], 'm', 'r')) === 'BAD_SUSPECT', 'cannot accuse an empty optional seat');
+  await Promise.all(seats.map(c => rpc('td_vote', c, demo.solution.killer, 'm', 'r')));
+  s = await rpc('td_state', pc[hostRole], null);
+  ok(s.voteCount === 10 && s.playerCount === 10, `10 of 10 voted (got ${s.voteCount}/${s.playerCount})`);
+  await rpc('td_advance', pc[hostRole], 7, 8);
+  ok((await rpc('td_state', seats[2], null)).reveal.ballots.length === 10, 'reveal with 10 ballots');
+}
+
 console.log(`${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
