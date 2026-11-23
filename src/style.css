@@ -153,3 +153,36 @@ label.small { display: block; margin-top: 8px; }
 /* plot-twist round */
 .panel.twist { border-color: #c0392b; box-shadow: 0 0 0 1px #c0392b inset, 0 0 24px rgba(192, 57, 43, .35); }
 .panel.twist .kicker { color: #ff7a6b; }
+
+/* ---------- Christmas theme ---------- */
+:root[data-theme="xmas"] {
+  --bg: #0d1914; --bg2: #11221a; --card: #16291f; --line: #2b4a37; --ink: #fbf6ec; --muted: #aec3b3;
+  --gold: #f4c96b; --gold2: #e0ad4c; --wine: #b3202f; --red: #ef5b62; --green: #6fcf8a;
+}
+[data-theme="xmas"] .hero { position: relative; background:
+  radial-gradient(90% 70% at 15% 0%, #7a1622 0%, transparent 60%),
+  radial-gradient(90% 70% at 90% 10%, #145233 0%, transparent 60%), var(--bg); }
+[data-theme="xmas"] .hero h1 { text-shadow: 0 0 24px #f4c96b44; }
+[data-theme="xmas"] .panel { border-color: var(--line); background: linear-gradient(180deg, #19301f, var(--card)); }
+[data-theme="xmas"] .panel.story, [data-theme="xmas"] .panel.event { border-top: 3px solid var(--wine); }
+[data-theme="xmas"] .primary { background: linear-gradient(180deg, #d63a45, #a3202f); color: #fff; }
+[data-theme="xmas"] .topbar { position: sticky; }
+[data-theme="xmas"] .brand { color: #fff; }
+
+.snow { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
+[data-theme="xmas"] main { position: relative; z-index: 1; }
+
+/* string of twinkling lights */
+.lights { position: absolute; left: 0; right: 0; bottom: -9px; height: 18px; display: flex; justify-content: space-around; pointer-events: none;
+  background: radial-gradient(60% 10px at 50% -2px, transparent 8px, #2a3a2e 8px 9.5px, transparent 10px) 0 0 / 40px 18px repeat-x; }
+.hero .lights { top: calc(env(safe-area-inset-top) + 6px); bottom: auto; }
+.lights i { width: 8px; height: 12px; border-radius: 50% 50% 45% 45%; margin-top: 5px; position: relative; animation: twinkle 1.6s ease-in-out infinite; }
+.lights i::before { content: ''; position: absolute; top: -4px; left: 2px; width: 4px; height: 4px; background: #3a4a3e; border-radius: 1px; }
+.lights i:nth-child(4n+1) { background: #ff4d5a; color: #ff4d5a; }
+.lights i:nth-child(4n+2) { background: #ffd35a; color: #ffd35a; animation-delay: .4s; }
+.lights i:nth-child(4n+3) { background: #4dd98a; color: #4dd98a; animation-delay: .8s; }
+.lights i:nth-child(4n+4) { background: #5ab4ff; color: #5ab4ff; animation-delay: 1.2s; }
+.lights i:nth-child(odd) { transform: rotate(-8deg); }
+.lights i:nth-child(even) { transform: rotate(8deg); }
+@keyframes twinkle { 0%, 100% { opacity: 1; box-shadow: 0 0 10px 2px currentColor; } 50% { opacity: .45; box-shadow: none; } }
+@media (prefers-reduced-motion: reduce) { .lights i { animation: none; } }

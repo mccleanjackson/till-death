@@ -18,6 +18,53 @@ function codeFromHash() {
   return m[1].toUpperCase();
 }
 
+// ---------- seasonal themes (chosen by game id, e.g. "xmas") ----------
+const themeFor = gameId => (gameId?.startsWith('xmas') ? 'xmas' : '');
+let setThemeState = () => {};
+function applyTheme(gameId) {
+  const t = themeFor(gameId);
+  store.set('td_theme', t);
+  document.documentElement.dataset.theme = t;
+  setThemeState(t);
+}
+document.documentElement.dataset.theme = store.get('td_theme', '');
+const festive = () => document.documentElement.dataset.theme === 'xmas';
+
+function Lights() {
+  return <div className="lights" aria-hidden>{Array.from({ length: 18 }, (_, i) => <i key={i} />)}</div>;
+}
+
+// Gentle falling snow on a canvas behind the taps (no pointer events, paused for reduced motion).
+function Snow() {
+  const ref = useRef(null);
+  useEffect(() => {
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const cv = ref.current, ctx = cv.getContext('2d');
+    let w, h, raf;
+    const resize = () => { const d = devicePixelRatio || 1; w = innerWidth; h = innerHeight; cv.width = w * d; cv.height = h * d; ctx.setTransform(d, 0, 0, d, 0, 0); };
+    resize(); addEventListener('resize', resize);
+    const flakes = Array.from({ length: 70 }, () => ({ x: Math.random() * w, y: Math.random() * h, r: 1 + Math.random() * 2.6, v: .3 + Math.random() * .9, s: Math.random() * 6.28 }));
+    const tick = () => {
+      ctx.clearRect(0, 0, w, h); ctx.fillStyle = 'rgba(255,255,255,.8)';
+      for (const f of flakes) {
+        f.y += f.v; f.s += .01; f.x += Math.sin(f.s) * .4;
+        if (f.y > h + 5) { f.y = -5; f.x = Math.random() * w; }
+        ctx.beginPath(); ctx.arc(f.x, f.y, f.r, 0, 6.28); ctx.fill();
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    tick();
+    return () => { cancelAnimationFrame(raf); removeEventListener('resize', resize); };
+  }, []);
+  return <canvas ref={ref} className="snow" aria-hidden />;
+}
+
+function Root() {
+  const [theme, setTheme] = useState(() => store.get('td_theme', ''));
+  setThemeState = setTheme;
+  return <>{theme === 'xmas' && <Snow />}<App /></>;
+}
+
 // Shared scan-to-join link: …/#/join/XYZ789 (from the QR code on the host's phone)
 function joinFromHash() {
   const m = location.hash.match(/#\/?join\/([A-Za-z0-9-]+)/);
@@ -104,6 +151,7 @@ function App() {
   // Remember this phone's seat per game, so scanning the QR code again goes straight back to it.
   useEffect(() => { if (game?.gameId && code) store.set(`td_mycode_${game.gameId}`, code); }, [game?.gameId, code]);
   useEffect(() => { if (rawGame?.title) { store.set('td_title', rawGame.title); document.title = rawGame.title; } }, [rawGame?.title]);
+  useEffect(() => { if (rawGame?.gameId && themeFor(rawGame.gameId) !== store.get('td_theme', '')) applyTheme(rawGame.gameId); }, [rawGame?.gameId]);
   useEffect(() => { window.scrollTo(0, 0); }, [tab]);
 
   // Announce phase changes
@@ -143,6 +191,7 @@ function App() {
       <div className="topbar">
         <div className="brand">{game.title || <>Till Death <em>Do Us Part</em></>}</div>
         <div className="phase"><span className={`dot p${game.phase}`} />{PHASE_LABEL[game.phase]}</div>
+        {festive() && <Lights />}
       </div>
       {offline && <Banner kind="warn">Reconnecting… your phone will catch up automatically.</Banner>}
       {toast && <div className="toast" onClick={() => setToast(null)}>{toast}</div>}
@@ -173,7 +222,7 @@ function NewDot({ game }) {
 // ---------- shells ----------
 function Shell({ children, hero }) {
   const title = store.get('td_title');
-  return <div className="app">{hero && <header className="hero"><div className="eyebrow">A murder mystery party</div><h1>{title || <>Till Death<br /><em>Do Us Part</em></>}</h1></header>}<main>{children}</main></div>;
+  return <div className="app">{hero && <header className="hero">{festive() && <Lights />}<div className="eyebrow">{festive() ? 'A Christmas murder mystery' : 'A murder mystery party'}</div><h1>{title || <>Till Death<br /><em>Do Us Part</em></>}</h1></header>}<main>{children}</main></div>;
 }
 const Panel = ({ title, kicker, children, className = '' }) => <section className={`panel ${className}`}>{kicker && <div className="kicker">{kicker}</div>}{title && <h2>{title}</h2>}{children}</section>;
 const Banner = ({ kind = 'info', children }) => <div className={`banner ${kind}`}>{children}</div>;
@@ -206,6 +255,7 @@ function QuickJoin({ joinCode, onJoined, onCancel }) {
     try {
       const i = await api.joinInfo(joinCode);
       if (i.title) store.set('td_title', i.title);
+      if (themeFor(i.gameId) !== store.get('td_theme', '')) applyTheme(i.gameId);
       const mine = store.get(`td_mycode_${i.gameId}`);
       if (mine) return onJoined(mine); // this phone already has a seat in this game
       setInfo(i); setErr(null);
@@ -702,4 +752,4 @@ function Votes({ game }) {
   );
 }
 
-createRoot(document.getElementById('root')).render(<App />);
+createRoot(document.getElementById('root')).render(<Root />);

@@ -12,6 +12,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const PORT = Number(process.env.PORT || 54399);
 const dir = mkdtempSync(join(tmpdir(), 'td-mock-'));
 copyFileSync(process.env.MOCK_STORY || join(root, 'scripts/demo-story.json'), join(dir, 'story.json')); // MOCK_STORY: try another story locally
+if (process.env.MOCK_XMAS) copyFileSync(process.env.MOCK_XMAS, join(dir, 'xmas.json')); // MOCK_XMAS: also seed a Christmas-themed game
 execFileSync('node', [join(root, 'scripts/make-seed.mjs'), '--host', 'avery'], { env: { ...process.env, TD_PRIVATE_DIR: dir }, stdio: 'ignore' });
 const codes = JSON.parse(readFileSync(join(dir, 'codes.json'), 'utf8'));
 
@@ -50,4 +51,5 @@ createServer((req, res) => {
   console.log(`Mock Supabase on http://localhost:${PORT}`);
   for (const [role, code] of Object.entries(codes.party)) console.log(`  ${role.padEnd(8)} ${code}${role === 'avery' ? '  (host)' : ''}`);
   console.log('  Join links appear in the host panel (scan-to-join).');
+  if (codes.xmas) console.log(`  xmas host: ${codes.xmas[JSON.parse(readFileSync(join(dir, 'hosts.json'), 'utf8')).xmas]}`);
 });

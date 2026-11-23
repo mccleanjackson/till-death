@@ -31,7 +31,20 @@ if (existsSync(xmasPath)) stories.xmas = JSON.parse(readFileSync(xmasPath, 'utf8
 const GAMES = { party: 'party', practice: 'practice', party2: stories.party12 ? 'party12' : 'party', practice2: 'practice', ...(stories.xmas ? { xmas: 'xmas' } : {}) };
 const problems = Object.entries(stories).flatMap(([k, s]) => checkStory(s, k));
 if (problems.length) { console.error(problems.join('\n')); process.exit(1); }
+// Games where the host plays a random seat (they may end up as the culprit or accomplice).
+// The pick is saved in hosts.json so re-running the seed never moves the host.
+const RANDOM_HOST = new Set(['xmas']);
+const hostsPath = resolve(privateDir, 'hosts.json');
+const hosts = existsSync(hostsPath) ? JSON.parse(readFileSync(hostsPath, 'utf8')) : {};
+for (const g of RANDOM_HOST) if (GAMES[g]) {
+  const ids = stories[GAMES[g]].roles.map(r => r.id);
+  if (!ids.includes(hosts[g])) hosts[g] = ids[randomInt(ids.length)];
+}
+writeFileSync(hostsPath, JSON.stringify(hosts, null, 2));
+const hostOf = game => (RANDOM_HOST.has(game) ? hosts[game] : hostRole);
+
 for (const [k, st] of Object.entries(stories)) {
+  if (Object.entries(GAMES).every(([g, sid]) => sid !== k || RANDOM_HOST.has(g))) continue;
   if (!st.roles.some(r => r.id === hostRole)) { console.error(`--host ${hostRole} is not a role in ${k}`); process.exit(1); }
   if ([st.solution.killer, st.solution.accomplice].includes(hostRole) || st.roles.find(r => r.id === hostRole).optional) {
     console.error(`The host can't be the culprit, the accomplice or an optional seat in ${k}. Pick a different --host.`);
@@ -64,7 +77,7 @@ for (const [game, storyId] of Object.entries(GAMES)) {
   // A game may switch story only while it is still in the lobby.
   sql += `insert into td_private.games (id, story_id) values (${q(game)}, ${q(storyId)}) on conflict (id) do update set story_id = excluded.story_id where td_private.games.phase = 0;\n`;
   for (const id of roleIds(game)) {
-    sql += `insert into td_private.players (code, game_id, role_id, is_host) values (${q(codes[game][id])}, ${q(game)}, ${q(id)}, ${id === hostRole}) on conflict (code) do update set is_host = excluded.is_host;\n`;
+    sql += `insert into td_private.players (code, game_id, role_id, is_host) values (${q(codes[game][id])}, ${q(game)}, ${q(id)}, ${id === hostOf(game)}) on conflict (code) do update set is_host = excluded.is_host;\n`;
   }
   sql += `update td_private.games set version = version + 1 where id = ${q(game)};\n`;
 }
@@ -75,6 +88,6 @@ console.log(`Wrote ${resolve(privateDir, 'seed.sql')}`);
 console.log(`Host (${hostRole}) links — the host screen in the app shows everyone else's links:`);
 console.log(`  Practice game: ${siteUrl}#/j/${codes.practice[hostRole]}`);
 console.log(`  Party game:    ${siteUrl}#/j/${codes.party[hostRole]}`);
-if (codes.xmas) console.log(`  Christmas game: ${siteUrl}#/j/${codes.xmas[hostRole]}`);
+if (codes.xmas) console.log(`  Christmas game: ${siteUrl}#/j/${codes.xmas[hostOf('xmas')]}`);
 console.log(`  Second host — practice: ${siteUrl}#/j/${codes.practice2[hostRole]}`);
 console.log(`  Second host — party:    ${siteUrl}#/j/${codes.party2[hostRole]}`);
