@@ -525,6 +525,29 @@ function Card({ game, code, refresh }) {
 // Every player gets the same sealed envelope so a glance at someone's screen gives nothing away.
 function Envelope({ killerBrief, accompliceBrief, hasAccomplice }) {
   const [open, setOpen] = useState(false);
+  const [unwrapping, setUnwrapping] = useState(false);
+  // Christmas: the identity is a wrapped present that unwraps when tapped.
+  if (!open && festive()) {
+    const unwrap = () => {
+      if (unwrapping) return;
+      if (matchMedia('(prefers-reduced-motion: reduce)').matches) return setOpen(true);
+      setUnwrapping(true);
+      try { navigator.vibrate?.(40); } catch { /* ignore */ }
+      setTimeout(() => { setOpen(true); setUnwrapping(false); }, 1450);
+    };
+    return (
+      <button className={`gift ${unwrapping ? 'unwrapping' : ''}`} onClick={unwrap} aria-label="Unwrap your secret identity">
+        <span className="kicker">Top secret · for your eyes only</span>
+        <div className="giftbox" aria-hidden>
+          <div className="sparkles">{Array.from({ length: 10 }, (_, i) => <i key={i} style={{ '--a': `${i * 36}deg` }} />)}</div>
+          <div className="lid"><div className="bow" /></div>
+          <div className="box" />
+        </div>
+        <b>{unwrapping ? 'Unwrapping…' : 'Tap to unwrap your secret identity'}</b>
+        <span className="small">Make sure nobody is looking at your screen.</span>
+      </button>
+    );
+  }
   if (!open) return (
     <button className="envelope" onClick={() => setOpen(true)}>
       <span className="kicker">Top secret · for your eyes only</span>
@@ -532,9 +555,9 @@ function Envelope({ killerBrief, accompliceBrief, hasAccomplice }) {
       <span className="small">Make sure nobody is looking at your screen.</span>
     </button>
   );
-  if (killerBrief) return <Panel kicker="Top secret · tap to hide" title="You are the murderer" className="killer"><div onClick={() => setOpen(false)}><Paras text={killerBrief} /></div></Panel>;
-  if (accompliceBrief) return <Panel kicker="Top secret · tap to hide" title="You are the accomplice" className="killer"><div onClick={() => setOpen(false)}><Paras text={accompliceBrief} /><p><b>You win if the group accuses the wrong person.</b> You don’t know who the murderer is, and they don’t know it’s you. You may lie.</p></div></Panel>;
-  return <Panel kicker="Top secret · tap to hide" title="You are innocent" className="innocent"><div onClick={() => setOpen(false)}>
+  if (killerBrief) return <Panel kicker="Top secret · tap to hide" title="You are the murderer" className="killer unwrapped"><div onClick={() => setOpen(false)}><Paras text={killerBrief} /></div></Panel>;
+  if (accompliceBrief) return <Panel kicker="Top secret · tap to hide" title="You are the accomplice" className="killer unwrapped"><div onClick={() => setOpen(false)}><Paras text={accompliceBrief} /><p><b>You win if the group accuses the wrong person.</b> You don’t know who the murderer is, and they don’t know it’s you. You may lie.</p></div></Panel>;
+  return <Panel kicker="Top secret · tap to hide" title="You are innocent" className="innocent unwrapped"><div onClick={() => setOpen(false)}>
     <p>You did not kill anyone. You may dodge questions about your secret, but never lie about evidence. Help catch the real murderer.</p>
     {hasAccomplice && <p><b>Watch out:</b> someone here is secretly working to send the investigation the wrong way. They don’t know who the murderer is either, and they’re allowed to lie.</p>}
   </div></Panel>;

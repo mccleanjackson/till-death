@@ -198,3 +198,39 @@ label.small { display: block; margin-top: 8px; }
 [data-theme="xmas"] .primary::before { top: -7px; height: 24px; background-size: 200px 24px; left: -3px; right: -3px; }
 [data-theme="xmas"] .primary { margin-top: 10px; }
 [data-theme="xmas"] .phase::before { content: ''; position: absolute; left: 6px; right: 6px; top: -4px; height: 8px; border-radius: 8px 8px 4px 4px; background: #f4faff; box-shadow: 0 1px 1px rgba(0, 20, 40, .3); pointer-events: none; }
+
+/* ---------- wrapped-present identity (Christmas) ---------- */
+.gift { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 100%; margin-top: 24px; padding: 18px 18px 22px; border-radius: var(--r);
+  border: 1px dashed var(--gold2); background: radial-gradient(120% 100% at 50% 0%, #22402e, var(--card)); cursor: pointer; text-align: center; overflow: visible; }
+.gift b { font: 700 20px 'Playfair Display', serif; }
+.giftbox { position: relative; width: 150px; height: 150px; margin: 18px auto 6px; animation: wiggle 2.8s ease-in-out infinite; }
+.giftbox .box { position: absolute; left: 10px; right: 10px; bottom: 0; height: 100px; border-radius: 6px;
+  background: linear-gradient(90deg, transparent 43%, #f4c96b 43% 57%, transparent 57%), repeating-linear-gradient(45deg, #c8202f 0 12px, #b01b29 12px 24px);
+  box-shadow: inset 0 -10px 18px #0004, 0 8px 18px #0006; }
+.giftbox .lid { position: absolute; left: 0; right: 0; top: 22px; height: 32px; border-radius: 6px; z-index: 2;
+  background: linear-gradient(90deg, transparent 43%, #ffd981 43% 57%, transparent 57%), repeating-linear-gradient(45deg, #dc2a3a 0 12px, #c3202f 12px 24px);
+  box-shadow: 0 4px 8px #0005; }
+.giftbox .bow { position: absolute; left: 50%; top: -18px; width: 0; height: 0; }
+.giftbox .bow::before, .giftbox .bow::after { content: ''; position: absolute; top: -4px; width: 34px; height: 24px; border: 7px solid #f4c96b; border-radius: 50% 50% 50% 50%; background: #f4c96b33; }
+.giftbox .bow::before { right: 0; transform: rotate(-22deg); transform-origin: right center; }
+.giftbox .bow::after { left: 0; transform: rotate(22deg); transform-origin: left center; }
+.sparkles { position: absolute; left: 50%; top: 45%; width: 0; height: 0; z-index: 3; }
+.sparkles i { position: absolute; width: 8px; height: 8px; border-radius: 50%; background: #ffe08a; opacity: 0; box-shadow: 0 0 10px #ffd35a; }
+.sparkles i:nth-child(3n) { background: #ff5a66; box-shadow: 0 0 10px #ff5a66; }
+.sparkles i:nth-child(3n+1) { background: #6fe39a; box-shadow: 0 0 10px #6fe39a; }
+@keyframes wiggle { 0%, 70%, 100% { transform: rotate(0); } 75% { transform: rotate(-4deg); } 82% { transform: rotate(4deg); } 89% { transform: rotate(-2deg); } }
+
+.gift.unwrapping .giftbox { animation: shake .35s ease-in-out 2; }
+.gift.unwrapping .bow { animation: bowpop .45s ease-in forwards .55s; }
+.gift.unwrapping .lid { animation: lidoff .6s cubic-bezier(.3, -0.3, .7, 1) forwards .7s; }
+.gift.unwrapping .box { animation: boxdrop .45s ease-in forwards 1s; }
+.gift.unwrapping .sparkles i { animation: burst .7s ease-out forwards .8s; }
+@keyframes shake { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-6deg) scale(1.03); } 75% { transform: rotate(6deg) scale(1.03); } }
+@keyframes bowpop { to { transform: translateY(-40px) scale(1.5) rotate(25deg); opacity: 0; } }
+@keyframes lidoff { to { transform: translate(70px, -120px) rotate(35deg); opacity: 0; } }
+@keyframes boxdrop { to { transform: translateY(30px) scaleY(.2); opacity: 0; } }
+@keyframes burst { 0% { opacity: 1; transform: rotate(var(--a)) translateX(0); } 100% { opacity: 0; transform: rotate(var(--a)) translateX(95px); } }
+
+[data-theme="xmas"] .panel.unwrapped { animation: reveal .5s cubic-bezier(.2, 1.4, .4, 1); }
+@keyframes reveal { from { transform: scale(.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .giftbox { animation: none; } [data-theme="xmas"] .panel.unwrapped { animation: none; } }
