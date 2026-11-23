@@ -59,10 +59,82 @@ function Snow() {
   return <canvas ref={ref} className="snow" aria-hidden />;
 }
 
+// Hand-drawn-looking snow caps: every box gets its own random drifts, piles and icicles.
+function snowSVG(W, small) {
+  const r = Math.random, f = n => n.toFixed(1);
+  const H = small ? 34 : 50, B = small ? 13 : 19;
+  // lumpy top edge with a pile or two
+  const pts = [];
+  for (let x = 8; x < W - 8; x += (small ? 12 : 16) + r() * (small ? 18 : 28)) pts.push([x, (small ? 2.5 : 3.5) + r() * (small ? 4 : 7)]);
+  pts.push([W - 8, 3 + r() * 5]);
+  for (let k = 0, piles = small ? 1 : 1 + (r() < .6); k < piles; k++) {
+    const i = Math.floor(r() * pts.length);
+    for (const [j, dy] of [[i, -3.5], [i - 1, -1.5], [i + 1, -1.5]]) if (pts[j]) pts[j][1] = Math.max(0.6, pts[j][1] + dy);
+  }
+  const sideL = 4 + r() * (small ? 6 : 12), sideR = 4 + r() * (small ? 6 : 12);
+  let d = `M0,${f(B + sideL)} Q0,${f(pts[0][1])} ${f(pts[0][0])},${f(pts[0][1])}`;
+  for (let i = 1; i < pts.length; i++) {
+    const [x0, y0] = pts[i - 1], [x1, y1] = pts[i];
+    d += ` Q${f((x0 + x1) / 2)},${f(Math.min(y0, y1) - 2.5 - r() * 2)} ${f(x1)},${f(y1)}`;
+  }
+  d += ` Q${W},${f(pts[pts.length - 1][1])} ${W},${f(B + sideR)}`;
+  // bottom edge, right to left, with icicles of every size
+  let x = W, cursor = W - 6;
+  const creases = [];
+  for (;;) {
+    const gap = (small ? 10 : 14) + r() * (small ? 26 : 42);
+    const w = small ? 4 + r() * 6 : 5 + r() * 11;
+    const cx = cursor - gap;
+    if (cx - w / 2 < 8) break;
+    const right = cx + w / 2, left = cx - w / 2;
+    d += ` Q${f((x + right) / 2)},${f(B + 1 + r() * 4)} ${f(right)},${f(B)}`;
+    if (r() < .28) { // small nub
+      const L = 2.5 + r() * 3.5;
+      d += ` Q${f(cx)},${f(B + L * 2)} ${f(left)},${f(B)}`;
+    } else {
+      const L = (small ? 5 : 8) + r() * r() * (small ? 13 : 24), neck = w * .2, rad = w * .3;
+      d += ` C${f(right)},${f(B + L * .3)} ${f(cx + neck)},${f(B + L * .45)} ${f(cx + neck)},${f(B + L - rad)}`;
+      d += ` A${f(rad)},${f(rad)} 0 1 1 ${f(cx - neck)},${f(B + L - rad)}`;
+      d += ` C${f(cx - neck)},${f(B + L * .45)} ${f(left)},${f(B + L * .3)} ${f(left)},${f(B)}`;
+    }
+    if (r() < .5) creases.push(cx + (r() - .5) * 20);
+    x = left; cursor = left;
+  }
+  d += ` Q${f(x / 2)},${f(B + 2 + r() * 3)} 0,${f(B + sideL)} Z`;
+  // soft crease lines and glints for texture
+  const lines = creases.map(c => { const y = B - 3 - r() * 5, half = 8 + r() * 10; return `M${f(c - half)},${f(y)} Q${f(c)},${f(y - 3)} ${f(c + half)},${f(y)}`; }).join(' ');
+  const glints = Array.from({ length: Math.max(3, Math.round(W / 70)) }, () => `<circle cx='${f(8 + r() * (W - 16))}' cy='${f(3 + r() * (B - 6))}' r='${f(.6 + r() * .9)}' fill='#fff'/>`).join('');
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${W}' height='${H}' viewBox='0 0 ${W} ${H}' preserveAspectRatio='none'>`
+    + `<defs><linearGradient id='g' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='#ffffff'/><stop offset='${f(B * .55 / H)}' stop-color='#f5faff'/><stop offset='${f(B / H)}' stop-color='#dbeafa'/><stop offset='1' stop-color='#a9d0f0'/></linearGradient></defs>`
+    + `<path d='${d}' fill='#8fbbe2'/><path d='${d}' fill='url(#g)' transform='translate(0,-2.2)'/>`
+    + `<path d='${lines}' stroke='#c9def3' stroke-width='1.4' fill='none' stroke-linecap='round'/>${glints}</svg>`;
+  return { url: `url("data:image/svg+xml,${encodeURIComponent(svg)}")`, h: H };
+}
+const CAPPED = '.panel, .primary, .envelope, .gift';
+function SnowCaps() {
+  useEffect(() => {
+    const cap = el => {
+      const w = Math.round(el.offsetWidth);
+      if (!w || Math.abs((el._capW || 0) - w) < 12) return;
+      el._capW = w;
+      const { url, h } = snowSVG(w + 8, el.classList.contains('primary'));
+      el.style.setProperty('--cap', url); el.style.setProperty('--cap-h', `${h}px`);
+    };
+    const ro = new ResizeObserver(es => es.forEach(e => cap(e.target)));
+    const seen = new WeakSet();
+    const scan = () => document.querySelectorAll(CAPPED).forEach(el => { if (!seen.has(el)) { seen.add(el); ro.observe(el); cap(el); } });
+    const mo = new MutationObserver(scan);
+    mo.observe(document.body, { childList: true, subtree: true });
+    scan();
+    return () => { mo.disconnect(); ro.disconnect(); };
+  }, []);
+  return null;
+}
+
 function Root() {
   const [theme, setTheme] = useState(() => store.get('td_theme', ''));
   setThemeState = setTheme;
-  return <>{theme === 'xmas' && <Snow />}<App /></>;
+  return <>{theme === 'xmas' && <><Snow /><SnowCaps /></>}<App /></>;
 }
 
 // Shared scan-to-join link: …/#/join/XYZ789 (from the QR code on the host's phone)
