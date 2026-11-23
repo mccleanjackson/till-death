@@ -128,14 +128,19 @@ begin
         'coupleStory', s->'coupleStories'->(r->>'couple')) end,
     'cast', (select jsonb_agg(jsonb_build_object(
                 'id', e->>'id', 'name', e->>'name', 'couple', e->>'couple', 'partner', e->>'partner', 'publicBio', e->>'publicBio',
-                'guestName', pl.guest_name, 'joined', pl.joined_at is not null) order by i)
+                'guestName', pl.guest_name, 'joined', pl.joined_at is not null,
+                'optional', coalesce((e->>'optional')::boolean, false)) order by i)
              from jsonb_array_elements(s->'roles') with ordinality t(e, i)
              left join td_private.players pl on pl.game_id = g.id and pl.role_id = e->>'id'),
     'rounds', coalesce((select jsonb_agg(e order by i) from jsonb_array_elements(s->'rounds') with ordinality t(e, i) where i <= rnd), '[]'::jsonb),
     'hasAccomplice', g.phase >= 2 and exists (select 1 from td_private.players where game_id = g.id and role_id = s->'solution'->>'accomplice' and joined_at is not null),
     'joinedCount', (select count(*) from td_private.players where game_id = g.id and joined_at is not null),
     'readyCount', (select count(*) from td_private.players where game_id = g.id and ready_at is not null),
-    'playerCount', (select count(*) from td_private.players where game_id = g.id),
+    -- Seats in play: everyone who joined plus any main character still open. Empty optional seats
+    -- (the extra couple in a 12-player story) don't count, so 10 guests in a 12-seat game reads 10/10.
+    'playerCount', (select count(*) from jsonb_array_elements(s->'roles') e
+                    join td_private.players pl on pl.game_id = g.id and pl.role_id = e->>'id'
+                    where pl.joined_at is not null or not coalesce((e->>'optional')::boolean, false)),
     'voteCount', (select count(*) from td_private.ballots where game_id = g.id),
     'myBallot', (select jsonb_build_object('suspect', b.suspect, 'motive', b.motive, 'reasoning', b.reasoning)
                  from td_private.ballots b where b.game_id = g.id and b.role_id = p.role_id)
@@ -237,7 +242,10 @@ begin
   p := td_private.player(p_code);
   select * into g from td_private.games where id = p.game_id;
   if g.phase <> 7 then raise exception 'VOTING_CLOSED' using hint = 'Accusations are not open right now.'; end if;
-  if not exists (select 1 from jsonb_array_elements(td_private.story(g.story_id)->'roles') e where e->>'id' = p_suspect) then
+  -- Any story character, except an optional seat nobody is playing.
+  if not exists (select 1 from jsonb_array_elements(td_private.story(g.story_id)->'roles') e
+                 join td_private.players pl on pl.game_id = g.id and pl.role_id = e->>'id'
+                 where e->>'id' = p_suspect and (pl.joined_at is not null or not coalesce((e->>'optional')::boolean, false))) then
     raise exception 'BAD_SUSPECT';
   end if;
   insert into td_private.ballots (game_id, role_id, suspect, motive, reasoning)
