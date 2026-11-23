@@ -5,18 +5,21 @@ export const ROLE_IDS = ['avery', 'blair', 'cameron', 'drew', 'ellis', 'finley',
 export function checkStory(s, label = 'story') {
   const problems = [];
   const need = (cond, msg) => { if (!cond) problems.push(`${label}: ${msg}`); };
-  for (const k of ['title', 'intro', 'roles', 'coupleStories', 'rounds', 'solution']) need(s[k], `missing "${k}"`);
+  for (const k of ['title', 'intro', 'roles', 'rounds', 'solution']) need(s[k], `missing "${k}"`);
   const roles = s.roles || [];
-  need(roles.length === 10 || roles.length === 12, `expected 10 or 12 roles, got ${roles.length}`);
-  need(ROLE_IDS.every(id => roles.some(r => r.id === id)), 'the original ten role ids must all be present');
+  need(roles.length >= 6 && roles.length <= 12, `expected 6–12 roles, got ${roles.length}`);
+  const couples = roles.some(r => r.partner);
+  if (roles.length >= 10 && couples) need(ROLE_IDS.every(id => roles.some(r => r.id === id)), 'the original ten role ids must all be present');
   const ids = roles.map(r => r.id);
   need(new Set(ids).size === ids.length, 'duplicate role ids');
   for (const r of roles) {
-    for (const k of ['id', 'name', 'couple', 'partner', 'publicBio', 'secret', 'alibi']) need(typeof r[k] === 'string' && r[k], `role ${r.id} missing ${k}`);
+    for (const k of ['id', 'name', 'publicBio', 'secret', 'alibi', ...(couples ? ['couple', 'partner'] : [])]) need(typeof r[k] === 'string' && r[k], `role ${r.id} missing ${k}`);
     need(Array.isArray(r.knows), `role ${r.id} knows must be an array`);
-    const partner = roles.find(x => x.id === r.partner);
-    need(partner && partner.partner === r.id, `role ${r.id} partner not reciprocal`);
-    need(s.coupleStories?.[r.couple], `no coupleStory for "${r.couple}"`);
+    if (couples) {
+      const partner = roles.find(x => x.id === r.partner);
+      need(partner && partner.partner === r.id, `role ${r.id} partner not reciprocal`);
+      need(s.coupleStories?.[r.couple], `no coupleStory for "${r.couple}"`);
+    }
   }
   const killers = roles.filter(r => r.killerBrief);
   need(killers.length === 1, `expected exactly 1 killerBrief, got ${killers.length}`);

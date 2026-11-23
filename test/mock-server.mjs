@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const PORT = Number(process.env.PORT || 54399);
 const dir = mkdtempSync(join(tmpdir(), 'td-mock-'));
-copyFileSync(join(root, 'scripts/demo-story.json'), join(dir, 'story.json'));
+copyFileSync(process.env.MOCK_STORY || join(root, 'scripts/demo-story.json'), join(dir, 'story.json')); // MOCK_STORY: try another story locally
 execFileSync('node', [join(root, 'scripts/make-seed.mjs'), '--host', 'avery'], { env: { ...process.env, TD_PRIVATE_DIR: dir }, stdio: 'ignore' });
 const codes = JSON.parse(readFileSync(join(dir, 'codes.json'), 'utf8'));
 

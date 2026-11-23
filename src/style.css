@@ -22,8 +22,8 @@ main { max-width: 640px; margin: 0 auto; padding: 12px 16px 24px; }
 
 .topbar { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 10px;
   padding: calc(10px + env(safe-area-inset-top)) 16px 10px; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); }
-.brand { font: 700 18px 'Playfair Display', serif; white-space: nowrap; }
-.phase { font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 7px; background: var(--card); border: 1px solid var(--line); padding: 6px 11px; border-radius: 99px; white-space: nowrap; }
+.brand { font: 700 18px 'Playfair Display', serif; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
+.phase { flex-shrink: 0; font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 7px; background: var(--card); border: 1px solid var(--line); padding: 6px 11px; border-radius: 99px; white-space: nowrap; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
 .dot.p1, .dot.p2, .dot.p3, .dot.p4, .dot.p5, .dot.p6 { background: var(--gold); box-shadow: 0 0 0 4px #e3c08d33; }
 .dot.p7 { background: var(--red); box-shadow: 0 0 0 4px #e0697f33; }
@@ -149,3 +149,7 @@ form input + button { margin-top: 12px; }
 .qr svg { width: 100%; height: auto; display: block; }
 select { width: 100%; padding: 12px; border-radius: 10px; font: inherit; margin: 6px 0 12px; background: rgba(255,255,255,.06); color: inherit; border: 1px solid rgba(255,255,255,.15); }
 label.small { display: block; margin-top: 8px; }
+
+/* plot-twist round */
+.panel.twist { border-color: #c0392b; box-shadow: 0 0 0 1px #c0392b inset, 0 0 24px rgba(192, 57, 43, .35); }
+.panel.twist .kicker { color: #ff7a6b; }

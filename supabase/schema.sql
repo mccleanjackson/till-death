@@ -175,6 +175,7 @@ begin
   s := td_private.story(g.story_id);
   return jsonb_build_object(
     'gameId', g.id, 'title', s->'title', 'tagline', s->'tagline',
+    'couples', exists (select 1 from jsonb_array_elements(s->'roles') e where e->>'partner' is not null),
     'open', (select count(*) from td_private.players where game_id = g.id and joined_at is null and not is_host),
     -- people already here whose partner seat is still free
     'partners', coalesce((select jsonb_agg(jsonb_build_object('roleId', pl.role_id, 'name', pl.guest_name) order by pl.guest_name)

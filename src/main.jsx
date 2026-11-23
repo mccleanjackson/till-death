@@ -103,6 +103,7 @@ function App() {
   useEffect(() => store.set('td_tab', tab), [tab]);
   // Remember this phone's seat per game, so scanning the QR code again goes straight back to it.
   useEffect(() => { if (game?.gameId && code) store.set(`td_mycode_${game.gameId}`, code); }, [game?.gameId, code]);
+  useEffect(() => { if (rawGame?.title) { store.set('td_title', rawGame.title); document.title = rawGame.title; } }, [rawGame?.title]);
   useEffect(() => { window.scrollTo(0, 0); }, [tab]);
 
   // Announce phase changes
@@ -117,7 +118,8 @@ function App() {
     }
     if (prev === null) { setTab(game.phase === 0 ? 'home' : PHASE_ARRIVAL[game.phase][1]); return; } // fresh open: go to the current phase's screen
     if (prev === game.phase || game.phase < prev) return;
-    const [msg, toTab] = PHASE_ARRIVAL[game.phase];
+    let [msg, toTab] = PHASE_ARRIVAL[game.phase];
+    if (game.rounds[game.phase - ROUND1]?.twist) msg = `Plot twist! ${msg}`;
     setToast(msg);
     try { navigator.vibrate?.([120, 60, 120]); } catch { /* ignore */ }
     setTab(toTab);
@@ -139,7 +141,7 @@ function App() {
   return (
     <div className="app">
       <div className="topbar">
-        <div className="brand">Till Death <em>Do Us Part</em></div>
+        <div className="brand">{game.title || <>Till Death <em>Do Us Part</em></>}</div>
         <div className="phase"><span className={`dot p${game.phase}`} />{PHASE_LABEL[game.phase]}</div>
       </div>
       {offline && <Banner kind="warn">Reconnecting… your phone will catch up automatically.</Banner>}
@@ -170,7 +172,8 @@ function NewDot({ game }) {
 
 // ---------- shells ----------
 function Shell({ children, hero }) {
-  return <div className="app">{hero && <header className="hero"><div className="eyebrow">A murder mystery for couples</div><h1>Till Death<br /><em>Do Us Part</em></h1></header>}<main>{children}</main></div>;
+  const title = store.get('td_title');
+  return <div className="app">{hero && <header className="hero"><div className="eyebrow">A murder mystery party</div><h1>{title || <>Till Death<br /><em>Do Us Part</em></>}</h1></header>}<main>{children}</main></div>;
 }
 const Panel = ({ title, kicker, children, className = '' }) => <section className={`panel ${className}`}>{kicker && <div className="kicker">{kicker}</div>}{title && <h2>{title}</h2>}{children}</section>;
 const Banner = ({ kind = 'info', children }) => <div className={`banner ${kind}`}>{children}</div>;
@@ -202,6 +205,7 @@ function QuickJoin({ joinCode, onJoined, onCancel }) {
   const load = useCallback(async () => {
     try {
       const i = await api.joinInfo(joinCode);
+      if (i.title) store.set('td_title', i.title);
       const mine = store.get(`td_mycode_${i.gameId}`);
       if (mine) return onJoined(mine); // this phone already has a seat in this game
       setInfo(i); setErr(null);
@@ -233,7 +237,7 @@ function QuickJoin({ joinCode, onJoined, onCancel }) {
         </>}
         <button className="primary" disabled={busy || !name.trim()}>{busy ? 'Finding your seat…' : 'Join'}</button>
       </form>
-      <p className="small">Coming as a couple? One of you joins first, then the other picks them from the list.</p>
+      {info.couples && <p className="small">Coming as a couple? One of you joins first, then the other picks them from the list.</p>}
     </Panel>
   );
 }
@@ -257,7 +261,7 @@ function NameForm({ code, onDone, game }) {
     try { await api.setName(code, v); onDone(); } catch (x) { setErr(x.message); setBusy(false); }
   };
   return (
-    <Panel kicker={`You’re in · ${game.role.couple}`} title="What’s your name?">
+    <Panel kicker={game.role.couple ? `You’re in · ${game.role.couple}` : 'You’re in'} title="What’s your name?">
       <p>Use the name your friends call you. It replaces your character’s name everywhere in the story, on every phone.</p>
       {err && <Banner kind="error">{err}</Banner>}
       <form onSubmit={submit}>
@@ -292,7 +296,7 @@ function Home({ game, code, refresh, onLeave, setTab }) {
       {game.phase === REVEAL ? <Reveal game={game} /> : game.phase === 0 ? (
         <>
           <Panel kicker={`Welcome, ${game.me.guestName}`} title="Waiting for everyone">
-            <p>You and {partnerName} are <b>{game.role.couple}</b>.</p>
+            {partnerName && <p>You and {partnerName} are <b>{game.role.couple}</b>.</p>}
             <p>When everyone has arrived, the host will start the night with the story of what happened. Your secret character card unlocks right after that.</p>
             <p className="stat"><b>{game.joinedCount}</b> of {game.playerCount} guests have joined</p>
           </Panel>
@@ -372,7 +376,7 @@ function HostPanel({ game, code, refresh }) {
   };
   const share = async (c) => {
     const link = `${base}#/j/${c.code}`;
-    const text = `Your private link for Till Death Do Us Part (${cast[c.roleId]?.couple}). Open it on your own phone and don't share it! ${link}`;
+    const text = `Your private link for ${game.title || 'the murder mystery'}. Open it on your own phone and don't share it! ${link}`;
     try {
       if (navigator.share) await navigator.share({ text });
       else { await navigator.clipboard.writeText(text); setMsg(`Copied the link for ${cast[c.roleId]?.name}`); }
@@ -399,7 +403,7 @@ function HostPanel({ game, code, refresh }) {
           <div className="joinbox">
             <JoinQR url={url} />
             <p className="small">Guests scan this with their phone camera and get a random character. Couples: one joins first, the other picks them from a list. Scanning again on the same phone goes back to the same character.</p>
-            <button className="chip" onClick={async () => { try { if (navigator.share) await navigator.share({ text: `Join Till Death Do Us Part: ${url}` }); else { await navigator.clipboard.writeText(url); setMsg('Join link copied'); } } catch { /* cancelled */ } }}>Share join link instead</button>
+            <button className="chip" onClick={async () => { try { if (navigator.share) await navigator.share({ text: `Join ${game.title || 'the murder mystery'}: ${url}` }); else { await navigator.clipboard.writeText(url); setMsg('Join link copied'); } } catch { /* cancelled */ } }}>Share join link instead</button>
           </div>
         );
       })()}
@@ -410,7 +414,7 @@ function HostPanel({ game, code, refresh }) {
             const hp = game.hostPlayers.find(p => p.roleId === c.id);
             return (
               <li key={c.id}>
-                <div><b>{c.guestName || <span className="muted">{c.name} · open seat</span>}</b> <span className="muted">· {c.couple}</span>
+                <div><b>{c.guestName || <span className="muted">{c.name} · open seat</span>}</b> {c.couple && <span className="muted">· {c.couple}</span>}
                   <div className="small">{hp.joined ? '✓ joined' : 'not joined yet'}{game.phase === 2 ? (hp.ready ? ' · ✓ read card' : ' · still reading') : ''}{game.phase === ACCUSE ? (hp.voted ? ' · ✓ voted' : ' · waiting on vote') : ''}</div></div>
                 <button className="chip" onClick={() => share(hp)}>Send link</button>
               </li>
@@ -441,14 +445,14 @@ function Card({ game, code, refresh }) {
         <Panel kicker="Your briefing" title="Get to know your role" className="briefing">
           <ol className="steps">
             <li>Open your <b>sealed envelope</b> (nobody looking!).</li>
-            <li>Read <b>who you are</b> and your couple’s story with {partner?.name}.</li>
+            <li>Read <b>who you are</b>{partner ? <> and your couple’s story with {partner.name}</> : null}.</li>
             <li>Remember your <b>secret</b> and your <b>alibi</b>.</li>
             <li>Note <b>what you know</b>. Other people need it to solve the case.</li>
             <li>Tap <b>I’ve read my card</b> at the bottom.</li>
           </ol>
         </Panel>
       )}
-      <Panel kicker={`${r.couple} · married to ${partner?.name}`} title={r.name} className="card">
+      <Panel kicker={partner ? `${r.couple} · married to ${partner.name}` : 'Your character'} title={r.name} className="card">
         <p className="lede">{r.publicBio}</p>
         <p className="small">Everyone can see the line above. Everything below is private: don’t show your screen.</p>
       </Panel>
@@ -459,7 +463,7 @@ function Card({ game, code, refresh }) {
       <Panel kicker="Hide this if you can" title="Your secret"><Paras text={r.secret} /></Panel>
       <Panel kicker="Where you were" title="Your alibi"><Paras text={r.alibi} /></Panel>
       {r.knows?.length > 0 && <Panel kicker="Share these when it helps you" title="What you know"><ul className="facts">{r.knows.map((k, i) => <li key={i}>{k}</li>)}</ul></Panel>}
-      {r.goals?.length > 0 && <Panel kicker="Little missions" title="Your goals tonight"><ul className="facts">{r.goals.map((k, i) => <li key={i}>{k}</li>)}</ul></Panel>}
+      {r.goals?.length > 0 && <Panel kicker={r.goals.length === 1 ? 'Try to pull this off' : 'Little missions'} title={r.goals.length === 1 ? 'Your side quest' : 'Your goals tonight'}><ul className="facts">{r.goals.map((k, i) => <li key={i}>{k}</li>)}</ul></Panel>}
       <p className="small center">Innocent players may hide secrets but should never lie about evidence.</p>
       {game.phase === 2 && (game.me.ready
         ? <Panel className="locked" kicker="Ready ✓" title="You’re all set"><p>The host will continue once everyone is ready. Your card stays here all night.</p></Panel>
@@ -498,10 +502,10 @@ function Suspects({ game }) {
   }, [game.cast]);
   return (
     <>
-      <Panel kicker={`${game.cast.length} guests · ${game.cast.length / 2} couples`} title="The suspects"><p>Your notes save on this phone only. Nobody else sees them.</p></Panel>
+      <Panel kicker={couples.length > 1 ? `${game.cast.length} guests · ${couples.length} couples` : `${game.cast.length} guests`} title="The suspects"><p>Your notes save on this phone only. Nobody else sees them.</p></Panel>
       {couples.map(([couple, people]) => (
         <section key={couple} className="couple">
-          <h3>{couple}</h3>
+          {couple && couple !== 'undefined' && <h3>{couple}</h3>}
           {people.map(c => (
             <div key={c.id} className={`suspect ${c.id === game.me.roleId ? 'me' : ''}`}>
               <div className="who"><b>{c.name}</b>{!c.guestName && <span> · open seat</span>}{c.id === game.me.roleId && <span className="you">you</span>}</div>
@@ -527,7 +531,7 @@ function Clues({ game }) {
     <>
       {!game.rounds.length && <Panel kicker="Evidence locker" title="Nothing yet"><p>Evidence unlocks when the host starts Round 1. In the meantime, read your card and get to know the suspects.</p></Panel>}
       {[...game.rounds].map((rd, i) => ({ rd, n: i + 1 })).reverse().map(({ rd, n }) => (
-        <Panel key={n} kicker={n > seenBefore.current ? 'New evidence' : `Round ${n}`} title={rd.title} className={n > seenBefore.current ? 'fresh' : ''}>
+        <Panel key={n} kicker={rd.twist ? `Plot twist · Round ${n}` : n > seenBefore.current ? 'New evidence' : `Round ${n}`} title={rd.title} className={[n > seenBefore.current && 'fresh', rd.twist && 'twist'].filter(Boolean).join(' ')}>
           {rd.prompt && <p className="prompt">{rd.prompt}</p>}
           {rd.exhibits.map(x => (
             <article key={x.id} className="exhibit"><div className="exid">{x.id}</div><div><h3>{x.title}</h3><Paras text={x.body} /></div></article>
@@ -665,6 +669,7 @@ function Reveal({ game }) {
         {s.timeline?.length > 0 && <><h3>Timeline</h3><ul className="timeline">{s.timeline.map((t, i) => <li key={i}>{t}</li>)}</ul></>}
       </Panel>
       {s.proof?.length > 0 && <Panel kicker="The deductions" title="How you could have known"><ul className="facts">{s.proof.map((t, i) => <li key={i}>{t}</li>)}</ul></Panel>}
+      {s.sideQuests?.length > 0 && <Panel kicker="How everyone’s mission played in" title="Side quests"><ul className="facts">{s.sideQuests.map((t, i) => <li key={i}>{t}</li>)}</ul></Panel>}
       {s.redHerrings?.length > 0 && <Panel kicker="Innocent, but suspicious" title="Red herrings"><ul className="facts">{(Array.isArray(s.redHerrings) ? s.redHerrings : [s.redHerrings]).map((t, i) => <li key={i}>{t}</li>)}</ul></Panel>}
     </>
   );

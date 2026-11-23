@@ -24,8 +24,11 @@ const stories = {
 // Optional 12-player version of the party story (adds an accomplice and one more guest).
 const story12Path = resolve(privateDir, 'story12.json');
 if (existsSync(story12Path)) stories.party12 = JSON.parse(readFileSync(story12Path, 'utf8'));
+// Christmas family game (8 solo players, no couples).
+const xmasPath = resolve(privateDir, 'xmas.json');
+if (existsSync(xmasPath)) stories.xmas = JSON.parse(readFileSync(xmasPath, 'utf8'));
 // Each game plays one of the stories. party2/practice2 are a second, independent copy for another host.
-const GAMES = { party: 'party', practice: 'practice', party2: stories.party12 ? 'party12' : 'party', practice2: 'practice' };
+const GAMES = { party: 'party', practice: 'practice', party2: stories.party12 ? 'party12' : 'party', practice2: 'practice', ...(stories.xmas ? { xmas: 'xmas' } : {}) };
 const problems = Object.entries(stories).flatMap(([k, s]) => checkStory(s, k));
 if (problems.length) { console.error(problems.join('\n')); process.exit(1); }
 for (const [k, st] of Object.entries(stories)) {
@@ -72,5 +75,6 @@ console.log(`Wrote ${resolve(privateDir, 'seed.sql')}`);
 console.log(`Host (${hostRole}) links — the host screen in the app shows everyone else's links:`);
 console.log(`  Practice game: ${siteUrl}#/j/${codes.practice[hostRole]}`);
 console.log(`  Party game:    ${siteUrl}#/j/${codes.party[hostRole]}`);
+if (codes.xmas) console.log(`  Christmas game: ${siteUrl}#/j/${codes.xmas[hostRole]}`);
 console.log(`  Second host — practice: ${siteUrl}#/j/${codes.practice2[hostRole]}`);
 console.log(`  Second host — party:    ${siteUrl}#/j/${codes.party2[hostRole]}`);
